@@ -5,3 +5,8 @@ dist
 .env.local
 npm-debug.log*
 .venv/
+.venv/
+.venv-1/
+__pycache__/
+*.pyc
+hawkeye.db

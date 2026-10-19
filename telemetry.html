@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HawkEye · Telemetry</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0b1220; color: #e8eef8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 40px 24px; }
+    main { max-width: 1150px; margin: auto; }
+    .eyebrow { color: #69dec6; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { font-size: clamp(28px, 5vw, 42px); margin: 10px 0; }
+    h2 { font-size: 20px; margin: 0; }
+    p { color: #aabbd1; line-height: 1.6; }
+    .panel { background: #121e30; border: 1px solid #2b3b51; border-radius: 16px; padding: 24px; margin-top: 24px; }
+    .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    button { background: #69dec6; color: #08221d; border: 0; border-radius: 8px; padding: 12px 18px; font: inherit; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #b9afff; outline-offset: 3px; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; text-align: left; }
+    th { color: #aabbd1; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+    th, td { padding: 16px 12px; border-bottom: 1px solid #2b3b51; white-space: nowrap; }
+    .empty { text-align: center; color: #aabbd1; white-space: normal; padding: 32px; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin: 20px 0; }
+    label { display: grid; gap: 8px; font-size: 14px; color: #c3d0e2; }
+    input { width: 100%; background: #0b1220; color: #e8eef8; border: 1px solid #42536b; border-radius: 8px; padding: 12px; font: inherit; }
+    .message { min-height: 24px; margin-bottom: 0; }
+    .error { color: #ffb4ac; }
+    .success { color: #69dec6; }
+    .meta { font-size: 13px; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">HawkEye / Local development</div>
+    <h1>Drone telemetry</h1>
+    <p>Inspect saved telemetry and submit a test record to your local backend.</p>
+    <p class="meta">API: http://127.0.0.1:8000/telemetry · Refresh manually to fetch updates.</p>
+  </header>
+  <section class="panel" aria-labelledby="records-title">
+    <div class="bar"><h2 id="records-title">Saved records</h2><button id="refresh" type="button">Refresh records</button></div>
+    <p id="load-message" class="message" role="status" aria-live="polite"></p>
+    <div class="scroll">
+      <table aria-label="Saved drone telemetry">
+        <thead><tr><th scope="col">ID</th><th scope="col">Drone ID</th><th scope="col">Speed</th><th scope="col">Battery (%)</th><th scope="col">Status</th><th scope="col">Mission ID</th></tr></thead>
+        <tbody id="records"><tr><td colspan="6" class="empty">Loading records…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="meta">Speed is displayed in the units supplied by your backend.</p>
+  </section>
+  <section class="panel" aria-labelledby="form-title">
+    <h2 id="form-title">Send test telemetry</h2>
+    <p>This creates a database record. It does not send a command to a drone.</p>
+    <form id="telemetry-form">
+      <div class="fields">
+        <label>Drone ID<input name="drone_id" value="DRONE-001" required maxlength="200"></label>
+        <label>Speed<input name="speed" type="number" min="0" step="any" value="45.5" required></label>
+        <label>Battery (%)<input name="battery" type="number" min="0" max="100" step="any" value="87.0" required></label>
+        <label>Status<input name="status" value="ACTIVE" required maxlength="100"></label>
+        <label>Mission ID<input name="mission_id" value="MISSION-001" required maxlength="200"></label>
+      </div>
+      <button id="submit" type="submit">Send test record</button>
+      <p id="submit-message" class="message" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+</main>
+<script>
+  const API = 'http://127.0.0.1:8000/telemetry';
+  const columns = ['id', 'drone_id', 'speed', 'battery', 'status', 'mission_id'];
+  const records = document.getElementById('records');
+  const refreshButton = document.getElementById('refresh');
+  const submitButton = document.getElementById('submit');
+  let hasLoaded = false;
+
+  function message(id, text, type = '') {
+    const element = document.getElementById(id);
+    element.textContent = text;
+    element.className = 'message ' + type;
+  }
+
+  function emptyRow(text) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = columns.length;
+    cell.className = 'empty';
+    cell.textContent = text;
+    row.append(cell);
+    records.replaceChildren(row);
+  }
+
+  async function request(options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(API, { ...options, signal: controller.signal, cache: 'no-store' });
+      const raw = await response.text();
+      let data;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+      if (!response.ok) {
+        const detail = data?.detail;
+        const explanation = typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : raw.slice(0, 250);
+        throw new Error(`HTTP ${response.status}: ${explanation || response.statusText}`);
+      }
+      return data;
+    } catch (error) {
+      if (error.name === 'AbortError') throw new Error('The request timed out.');
+      if (error instanceof TypeError) throw new Error('Cannot reach the API. Check that FastAPI is running and CORS allows this page’s origin.');
+      throw error;
+    } finally { clearTimeout(timeout); }
+  }
+
+  async function loadRecords() {
+    refreshButton.disabled = true;
+    message('load-message', 'Fetching records…');
+    try {
+      const data = await request();
+      const rows = Array.isArray(data) ? data : data?.telemetry;
+      if (!Array.isArray(rows) || rows.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new Error('Expected a JSON array of records or an object containing a telemetry array.');
+      }
+      const fragment = document.createDocumentFragment();
+      for (const record of rows) {
+        const row = document.createElement('tr');
+        for (const key of columns) {
+          const cell = document.createElement('td');
+          cell.textContent = record[key] == null ? '—' : String(record[key]);
+          row.append(cell);
+        }
+        fragment.append(row);
+      }
+      records.replaceChildren(fragment);
+      if (!rows.length) emptyRow('No telemetry yet. Send a test record below to get started.');
+      hasLoaded = true;
+      message('load-message', `${rows.length} record${rows.length === 1 ? '' : 's'} · Last fetched ${new Date().toLocaleTimeString()}`, 'success');
+    } catch (error) {
+      if (!hasLoaded) emptyRow('Records could not be loaded.');
+      message('load-message', error.message + (hasLoaded ? ' Previously fetched records are still shown.' : ''), 'error');
+    } finally { refreshButton.disabled = false; }
+  }
+
+  refreshButton.addEventListener('click', loadRecords);
+  document.getElementById('telemetry-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const body = {
+      drone_id: form.get('drone_id').trim(),
+      speed: Number(form.get('speed')),
+      battery: Number(form.get('battery')),
+      status: form.get('status').trim(),
+      mission_id: form.get('mission_id').trim()
+    };
+    if (!body.drone_id || !body.status || !body.mission_id || !Number.isFinite(body.speed) || body.speed < 0 || !Number.isFinite(body.battery) || body.battery < 0 || body.battery > 100) {
+      message('submit-message', 'Enter nonempty IDs and status, a nonnegative speed, and battery between 0 and 100.', 'error');
+      return;
+    }
+    submitButton.disabled = true;
+    message('submit-message', 'Sending test record…');
+    try {
+      await request({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      message('submit-message', 'The API accepted the test record.', 'success');
+      await loadRecords();
+    } catch (error) {
+      message('submit-message', error.message + ' If the connection failed, refresh the table before retrying: the record may already have been saved.', 'error');
+    } finally { submitButton.disabled = false; }
+  });
+  loadRecords();
+</script>
+</body>
+</html>
