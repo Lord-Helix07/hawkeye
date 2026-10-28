@@ -118,7 +118,7 @@ The object-detection model does not need to be finished for this work to begin. 
 
 **Assigned to:** AWS / Database Team
 
-`database.py`
+`backend/database/database.py`
 
 The priority this week is local backend and schema design — NOT AWS deployment.
 

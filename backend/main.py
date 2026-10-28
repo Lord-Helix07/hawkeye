@@ -1,6 +1,9 @@
-# HawkEye vehicle-detection pipeline entry point.
-# Processes a pursuit video with YOLO11 and writes a new video containing
-# labeled vehicle bounding boxes for target selection.
+# HawkEye main file 
+# 
+## Week 1 Additions: added vehicle-detection pipeline entry point.
+#Processes a pursuit video with YOLO11 and writes a new video containing
+#labeled vehicle bounding boxes for target selection.
+
 
 from pathlib import Path
 
@@ -10,12 +13,15 @@ import cv2
 from backend.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
 from backend.object_detection import detect_vehicles
 
-
+#input/output video paths
 VIDEOS_DIRECTORY = Path(__file__).parent / "videos"
 INPUT_VIDEO = VIDEOS_DIRECTORY / "dashcam.mp4"
 OUTPUT_VIDEO = VIDEOS_DIRECTORY / "dashcam_annotated.mp4"
 
+#go through the video frame by frame --> handle errors along the way 
+# --> run tissas code and plug it onto the actual video file (output)
 
+#Note from Shivaji: Fixed it up to create a new video with the annotated bounding boxes
 def process_video(input_path=INPUT_VIDEO, output_path=OUTPUT_VIDEO):
     """Detect vehicles in every frame and save an annotated video."""
     capture = cv2.VideoCapture(str(input_path))
