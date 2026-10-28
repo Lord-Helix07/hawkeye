@@ -13,6 +13,16 @@ Will be updated at the end of every week with everyones contributions
 * HTML/CSS
 * Figma for UI/UX design
 
+#### Running the frontend
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+Then open the `localhost` link it prints. Pages live in `frontend/src/pages/` (each with its own `.css`), and `frontend/src/App.jsx` switches between them.
+
 ### Computer Vision
 
 * Python
