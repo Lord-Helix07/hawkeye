@@ -1,0 +1,148 @@
+.deploy-header {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 16px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.deploy-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 26px;
+  color: #ffffff;
+}
+
+.deploy-nav {
+  display: flex;
+  gap: 64px;
+  margin-left: 230px;
+}
+
+.deploy-nav button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #9a9a9a;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deploy-nav button:hover {
+  color: #ffffff;
+}
+
+.deploy-main {
+  padding: 0 50px 32px;
+}
+
+.deploy-title {
+  position: relative;
+  text-align: center;
+  padding: 16px 0 12px;
+}
+
+.deploy-title h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 400;
+}
+
+.deploy-title p {
+  margin: 32px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mission-id {
+  position: absolute;
+  right: -30px;
+  bottom: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 20px;
+  color: #9a9a9a;
+}
+
+.mission-id strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.deploy-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 44px 0 20px;
+  background-color: #111111;
+  border-radius: 12px;
+}
+
+.deploy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 386px;
+  color: #9a9a9a;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.deploy-field input {
+  height: 52px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  background-color: #000000;
+  border: 1px solid #6a6a6a;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.deploy-field input:focus {
+  outline: none;
+  border-color: #ffffff;
+}
+
+.deploy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.clear-btn,
+.deploy-btn {
+  height: 72px;
+  border-radius: 999px;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.clear-btn {
+  padding: 0 28px;
+  background-color: #000000;
+  border: 1px solid #ffffff;
+  color: #ffffff;
+}
+
+.clear-btn:hover {
+  background-color: #1a1a1a;
+}
+
+.deploy-btn {
+  padding: 0 34px 0 44px;
+  background-color: #e0e0e0;
+  border: none;
+  color: #000000;
+}
+
+.deploy-btn span {
+  margin-left: 10px;
+}
+
+.deploy-btn:hover {
+  background-color: #ffffff;
+}
