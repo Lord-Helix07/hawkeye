@@ -27,7 +27,7 @@ export default function Deploy() {
   function handleDeploy(e) {
     e.preventDefault()
     // TODO: send `form` to the backend to start the mission
-    navigate('/telemetry')
+    navigate('/dashboard')
   }
 
   return (
@@ -41,7 +41,7 @@ export default function Deploy() {
           Hawkeye
         </span>
         <nav className="deploy-nav">
-          <button onClick={() => navigate('/telemetry')}>Live feed</button>
+          <button onClick={() => navigate('/dashboard')}>Live feed</button>
           <button>History</button>
           <button>Settings</button>
         </nav>
