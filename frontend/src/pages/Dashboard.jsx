@@ -1,4 +1,4 @@
-// telemetry page
+// dashboard page
 import '../styles/dashboard.css'
 
 export default function Dashboard() {

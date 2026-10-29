@@ -4,7 +4,7 @@ import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Deploy from './pages/Deploy.jsx'
-import Telemetry from './pages/Telemetry.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 
 // Temporary dev nav: lets everyone jump to any page while it's being built.
 function DevNav() {
@@ -16,7 +16,7 @@ function DevNav() {
       <button onClick={() => navigate('/login')}>Login</button>
       <button onClick={() => navigate('/register')}>Register</button>
       <button onClick={() => navigate('/deploy')}>Deploy</button>
-      <button onClick={() => navigate('/telemetry')}>Telemetry</button>
+      <button onClick={() => navigate('/dashboard')}>Dashboard</button>
     </nav>
   )
 }
@@ -31,7 +31,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/deploy" element={<Deploy />} />
-        <Route path="/telemetry" element={<Telemetry />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   )
