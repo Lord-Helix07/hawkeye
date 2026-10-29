@@ -19,18 +19,18 @@ class SignUpRequest(BaseModel):
 
 @app.post("/signup", status_code=201)
 def signup(request: SignUpRequest):
-    # 1. Check for duplicates
+    # check for duplicates
     for user in fake_users.values():
         if user["username"] == request.username or user["email"] == request.email:
             raise HTTPException(status_code=409, detail="Username or email already taken")
 
-    # 2. Generate a unique user ID
+    # generate a unique user id
     user_id = str(uuid.uuid4())
 
-    # 3. Hash the password
+    # hash password
     password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
 
-    # 4. Save the new user
+    # save the new user
     fake_users[user_id] = {
         "user_id": user_id,
         "username": request.username,
@@ -38,7 +38,7 @@ def signup(request: SignUpRequest):
         "password_hash": password_hash,
     }
 
-    # 5. Send back the user WITHOUT the password hash
+    # send back user without password hash
     return {"user_id": user_id, "username": request.username, "email": request.email}
 
 
