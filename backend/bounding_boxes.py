@@ -8,7 +8,7 @@ def create_bounding_boxes(detections):
 
     vehicles = []
 
-    for index, detection in enumerate(detections, start=0):
+    for index, detection in enumerate(detections, start=1):
         vehicle = {
             "box_id": index,
             "class_id": detection["class_id"],
