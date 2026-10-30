@@ -1,0 +1,290 @@
+{
+  "Missions": [
+    {
+      "area": "San Jose",
+      "drone_id": "drone-01",
+      "officer_unit": "Unit 12",
+      "mission_id": "msn-1001",
+      "started_at": "2026-10-27T21:15:00Z",
+      "target_vehicle_id": "veh-14",
+      "status": "active",
+      "target_label": "gray sedan"
+    },
+    {
+      "area": "Santa Clara",
+      "drone_id": "drone-03",
+      "officer_unit": "Unit 4",
+      "mission_id": "msn-1003",
+      "started_at": "2026-10-27T20:40:00Z",
+      "target_vehicle_id": "veh-21",
+      "status": "visual_contact_lost",
+      "target_label": "black SUV"
+    },
+    {
+      "area": "San Jose",
+      "drone_id": "drone-02",
+      "officer_unit": "Unit 7",
+      "mission_id": "msn-1002",
+      "started_at": "2026-10-27T18:02:00Z",
+      "target_vehicle_id": "veh-03",
+      "ended_at": "2026-10-27T18:27:00Z",
+      "status": "completed",
+      "target_label": "white pickup"
+    }
+  ],
+  "Telemetry": [
+    {
+      "drone_id": "drone-01",
+      "battery_pct": 91,
+      "speed_mps": 8.5,
+      "latitude": 37.3352,
+      "mission_id": "msn-1001",
+      "heading_deg": 275,
+      "altitude_m": 42,
+      "timestamp": "2026-10-27T21:15:00Z",
+      "longitude": -121.8811
+    },
+    {
+      "drone_id": "drone-01",
+      "battery_pct": 90,
+      "speed_mps": 12.1,
+      "latitude": 37.33548,
+      "mission_id": "msn-1001",
+      "heading_deg": 280,
+      "altitude_m": 45,
+      "timestamp": "2026-10-27T21:15:10Z",
+      "longitude": -121.88204
+    },
+    {
+      "drone_id": "drone-01",
+      "battery_pct": 89,
+      "speed_mps": 14.4,
+      "latitude": 37.33571,
+      "mission_id": "msn-1001",
+      "heading_deg": 268,
+      "altitude_m": 47.5,
+      "timestamp": "2026-10-27T21:15:20Z",
+      "longitude": -121.8832
+    },
+    {
+      "drone_id": "drone-03",
+      "battery_pct": 83,
+      "speed_mps": 15.8,
+      "latitude": 37.3542,
+      "mission_id": "msn-1003",
+      "heading_deg": 40,
+      "altitude_m": 50,
+      "timestamp": "2026-10-27T20:40:00Z",
+      "longitude": -121.9553
+    },
+    {
+      "drone_id": "drone-03",
+      "battery_pct": 79,
+      "speed_mps": 9.4,
+      "latitude": 37.3598,
+      "mission_id": "msn-1003",
+      "heading_deg": 55,
+      "altitude_m": 52,
+      "timestamp": "2026-10-27T20:46:00Z",
+      "longitude": -121.9487
+    },
+    {
+      "drone_id": "drone-02",
+      "battery_pct": 77,
+      "speed_mps": 6.2,
+      "latitude": 37.3291,
+      "mission_id": "msn-1002",
+      "heading_deg": 190,
+      "altitude_m": 38,
+      "timestamp": "2026-10-27T18:02:00Z",
+      "longitude": -121.8894
+    },
+    {
+      "drone_id": "drone-02",
+      "battery_pct": 71,
+      "speed_mps": 11,
+      "latitude": 37.3248,
+      "mission_id": "msn-1002",
+      "heading_deg": 175,
+      "altitude_m": 40,
+      "timestamp": "2026-10-27T18:10:00Z",
+      "longitude": -121.8911
+    },
+    {
+      "drone_id": "drone-02",
+      "battery_pct": 64,
+      "speed_mps": 0,
+      "latitude": 37.3189,
+      "mission_id": "msn-1002",
+      "heading_deg": 175,
+      "altitude_m": 36,
+      "timestamp": "2026-10-27T18:27:00Z",
+      "longitude": -121.8946
+    }
+  ],
+  "Alerts": [
+    {
+      "mission_id": "msn-1001",
+      "severity": "info",
+      "drone_id": "drone-01",
+      "message": "Officer selected the gray sedan as the pursuit target.",
+      "alert_type": "target_selected",
+      "alert_timestamp": "2026-10-27T21:15:05Z"
+    },
+    {
+      "mission_id": "msn-1001",
+      "severity": "warning",
+      "drone_id": "drone-01",
+      "message": "Target speed is above the pursuit threshold.",
+      "alert_type": "speed_high",
+      "alert_timestamp": "2026-10-27T21:16:40Z"
+    },
+    {
+      "mission_id": "msn-1003",
+      "severity": "critical",
+      "drone_id": "drone-03",
+      "message": "Drone lost visual contact with the black SUV.",
+      "alert_type": "visual_contact_lost",
+      "alert_timestamp": "2026-10-27T20:46:12Z"
+    },
+    {
+      "mission_id": "msn-1003",
+      "severity": "warning",
+      "drone_id": "drone-03",
+      "message": "Search area expanded around the last known position.",
+      "alert_type": "search_expanded",
+      "alert_timestamp": "2026-10-27T20:47:00Z"
+    },
+    {
+      "mission_id": "msn-1002",
+      "severity": "info",
+      "drone_id": "drone-02",
+      "message": "Pursuit ended and the drone is holding position.",
+      "alert_type": "mission_completed",
+      "alert_timestamp": "2026-10-27T18:26:30Z"
+    }
+  ],
+  "MediaMetadata": [
+    {
+      "drone_id": "drone-03",
+      "object_key": "missions/msn-1003/drone-03-204612.jpg",
+      "media_type": "image",
+      "mission_id": "msn-1003",
+      "width": 1920,
+      "media_id": "med-1004",
+      "captured_at": "2026-10-27T20:46:12Z",
+      "height": 1080
+    },
+    {
+      "drone_id": "drone-01",
+      "object_key": "missions/msn-1001/drone-01-211502.mp4",
+      "media_type": "video",
+      "mission_id": "msn-1001",
+      "width": 1920,
+      "media_id": "med-1001",
+      "captured_at": "2026-10-27T21:15:02Z",
+      "duration_sec": 30,
+      "height": 1080
+    },
+    {
+      "drone_id": "drone-01",
+      "object_key": "missions/msn-1001/drone-01-211520.jpg",
+      "media_type": "image",
+      "mission_id": "msn-1001",
+      "width": 1920,
+      "media_id": "med-1002",
+      "captured_at": "2026-10-27T21:15:20Z",
+      "height": 1080
+    },
+    {
+      "drone_id": "drone-02",
+      "object_key": "missions/msn-1002/drone-02-181000.mp4",
+      "media_type": "video",
+      "mission_id": "msn-1002",
+      "width": 1280,
+      "media_id": "med-1003",
+      "captured_at": "2026-10-27T18:10:00Z",
+      "duration_sec": 45,
+      "height": 720
+    }
+  ],
+  "Users": [
+    {
+      "badge_num": "1012",
+      "user_id": "usr-1001",
+      "username": "unit12",
+      "password_hash": "ec6e1c25258002eb1c67d15c7f45da7945fa4c58778fd7d88faa5e53e3b4698d",
+      "name": "Unit 12 Operator",
+      "role": "operator",
+      "officer_unit": "Unit 12",
+      "status": "active",
+      "created_at": "2026-10-27T16:00:00Z"
+    },
+    {
+      "badge_num": "1004",
+      "user_id": "usr-1002",
+      "username": "unit4",
+      "password_hash": "ec6e1c25258002eb1c67d15c7f45da7945fa4c58778fd7d88faa5e53e3b4698d",
+      "name": "Unit 4 Operator",
+      "role": "operator",
+      "officer_unit": "Unit 4",
+      "status": "active",
+      "created_at": "2026-10-27T16:05:00Z"
+    },
+    {
+      "badge_num": "1007",
+      "user_id": "usr-1003",
+      "username": "unit7",
+      "password_hash": "ec6e1c25258002eb1c67d15c7f45da7945fa4c58778fd7d88faa5e53e3b4698d",
+      "name": "Unit 7 Operator",
+      "role": "operator",
+      "officer_unit": "Unit 7",
+      "status": "active",
+      "created_at": "2026-10-27T16:10:00Z"
+    }
+  ],
+  "Drones": [
+    {
+      "drone_id": "drone-01",
+      "battery_pct": 89,
+      "latitude": 37.33571,
+      "longitude": -121.8832,
+      "availability": "assigned"
+    },
+    {
+      "drone_id": "drone-02",
+      "battery_pct": 64,
+      "latitude": 37.3189,
+      "longitude": -121.8946,
+      "availability": "available"
+    },
+    {
+      "drone_id": "drone-03",
+      "battery_pct": 79,
+      "latitude": 37.3598,
+      "longitude": -121.9487,
+      "availability": "assigned"
+    },
+    {
+      "drone_id": "drone-04",
+      "battery_pct": 96,
+      "latitude": 37.3382,
+      "longitude": -121.8861,
+      "availability": "available"
+    },
+    {
+      "drone_id": "drone-05",
+      "battery_pct": 44,
+      "latitude": 37.3401,
+      "longitude": -121.8904,
+      "availability": "offline"
+    },
+    {
+      "drone_id": "drone-06",
+      "battery_pct": 9,
+      "latitude": 37.3314,
+      "longitude": -121.8852,
+      "availability": "available"
+    }
+  ]
+}
