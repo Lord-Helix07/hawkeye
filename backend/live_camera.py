@@ -41,7 +41,7 @@ class Camera:
         self.capture = None
         self.is_file = False
         self.file_delay = 0
-        #newest frame + a counter so detection can tell if it already processed this frame
+        #if new frame + counteer to see if alr detected         
         self.frame = None
         self.frame_number = 0
         #lock stops the camera thread and detection thread from touching the frame at the same time
@@ -66,7 +66,6 @@ class Camera:
         self.thread.start()
 
     def open_picamera(self, width, height):
-        # picamera2 comes from apt (python3-picamera2), not pip
         from picamera2 import Picamera2
 
         self.picamera = Picamera2()
@@ -101,7 +100,7 @@ class Camera:
             return self.picamera.capture_array()
 
         success, frame = self.capture.read()
-        #when a test video ends, jump back to the start so it loops forever
+        #relooping for test
         if not success and self.is_file:
             self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
             success, frame = self.capture.read()
@@ -114,7 +113,7 @@ class Camera:
         while self.running:
             frame = self.read_one()
             if frame is None:
-                #camera hiccup, wait a bit and try again instead of crashing
+                #camera hiccup cgeck
                 time.sleep(0.05)
                 continue
             with self.lock:
