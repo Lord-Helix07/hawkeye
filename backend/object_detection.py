@@ -3,21 +3,23 @@
 # This will be used to detect vehicles from camera frames.
 
 #  All imports
+import os
 from pathlib import Path
 
 import cv2
 from ultralytics import YOLO
 
 
-#  Load the YOLO11 model
-model = YOLO("yolo11n.pt")
-print("YOLO11 model loaded successfully")
+#  Load the YOLO11 model (set HAWKEYE_MODEL to use an exported model like yolo11n_ncnn_model on the Pi)
+MODEL_PATH = os.environ.get("HAWKEYE_MODEL", "yolo11n.pt")
+model = YOLO(MODEL_PATH, task="detect")
+print(f"YOLO11 model loaded successfully ({MODEL_PATH})")
 
 
 # Function to detect vehicles in a given frame and stores it in vehicles list
-def detect_vehicles(frame):
+def detect_vehicles(frame, image_size=640):
     """Detect supported vehicle classes and return their box coordinates."""
-    results = model(frame, classes=[2, 3, 5, 7])
+    results = model(frame, classes=[2, 3, 5, 7], imgsz=image_size, verbose=False)
     boxes = results[0].boxes
     vehicles = []
 
