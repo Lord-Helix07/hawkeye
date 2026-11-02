@@ -16,10 +16,9 @@ def prompt_id(label): # user input for an ID
 def main(): 
     try: #Main Code for drone through FastAPI assignment
         mission_id = prompt_id('Enter the mission ID: ')
-        drone_id = prompt_id('Enter the drone ID: ')
         base_url = os.getenv('HAWKEYE_API_URL', 'http://127.0.0.1:8000').rstrip('/') #API address in use
-        response = httpx.post(base_url + '/assignments', # Send both IDs to the FastAPI assignment as JSON.
-            json={'mission_id': mission_id, 'drone_id': drone_id}, timeout=20)
+        response = httpx.post(base_url + '/assignments', # Send only the mission ID; the backend selects the drone.
+            json={'mission_id': mission_id}, timeout=20)
         response.raise_for_status() #error if unsuccessful HTTP status
         print(json.dumps(response.json(), indent=2))
         return 0
