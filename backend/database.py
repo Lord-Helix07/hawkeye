@@ -8,6 +8,21 @@ import boto3 #for interacting with AWS services, including DynamoDB
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer # converting between Python type and Dynamo type
 from botocore.config import Config #configure connectiion timeouts and retry
 
+#from shivaji
+DYNAMODB_ENDPOINT_URL = os.getenv("DYNAMODB_ENDPOINT_URL")
+DYNAMODB_REGION = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+
+
+def get_dynamodb_resource():
+    """Return a DynamoDB resource for the AWS account in the default credential chain."""
+    client_kwargs = {
+        "region_name": DYNAMODB_REGION,
+        "config": Config(retries={"max_attempts": 3, "mode": "standard"}),
+    }
+    if DYNAMODB_ENDPOINT_URL:
+        client_kwargs["endpoint_url"] = DYNAMODB_ENDPOINT_URL
+    return boto3.resource("dynamodb", **client_kwargs)
+
 
 class AssignmentError(Exception): # custom message for assignment errors
     def __init__(self, status, message):
