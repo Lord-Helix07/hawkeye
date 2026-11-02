@@ -4,23 +4,23 @@ Police Pursuit Drone Fall 2026 Omicron
 # ReadME Rules:
 Will be updated at the end of every week with everyones contributions
 
-## Tech Stack
+# Tech Stack
 
-### Frontend
+## Frontend
 
 * React
 * JavaScript / JSX
 * HTML/CSS
 * Figma for UI/UX design
 
-### Computer Vision
+## Computer Vision
 
 * Python
 * YOLO11
 * OpenCV
 * ByteTrack (planned for later tracking work)
 
-### Backend / Cloud
+## Backend / Cloud
 
 * Python
 * REST/HTTPS APIs
@@ -28,36 +28,36 @@ Will be updated at the end of every week with everyones contributions
 * Amazon DynamoDB (planned)
 * Amazon S3 (planned where image/file storage is required)
 
-### Drone / Onboard Software
+## Drone / Onboard Software
 
 * Raspberry Pi
 * Python
 * Computer vision inference pipeline
 * Flight-controller communication
 
-## Week 1 Assignments
+# Week 1 Assignments
 
 The goal for Week 1 is to get the major software pieces developing in parallel. Teams should focus on their assigned subsystem rather than waiting for another subsystem to be completed.
 
-### Frontend Team
+## Frontend Team
 
 **Assigned to:** Sona, Alvina, Sravani, Nakpil, Grace
 
 Build the three initial screens based on the approved Figma designs.
 
-#### `screen1.jsx` — Target Selection
+### `screen1.jsx` — Target Selection
 
 Build the interface where the officer can view detected vehicles and select the vehicle that should become the pursuit target.
 
 The actual computer-vision system does not need to be finished yet. Mock vehicle/bounding-box data can be used during development.
 
-#### `screen2.jsx` — Live Pursuit Map
+### `screen2.jsx` — Live Pursuit Map
 
 Build the main pursuit interface showing the drone/target location and relevant pursuit information.
 
 Use mock location/status data until the backend is available.
 
-#### `screen3.jsx` — Visual Contact Lost
+### `screen3.jsx` — Visual Contact Lost
 
 Build the interface shown when the drone loses visual contact with the selected target.
 
@@ -65,7 +65,7 @@ Follow the approved Figma design and use mock states where backend information i
 
 ---
 
-### Object Detection
+## Object Detection
 
 **Assigned to:** Ayush + Jay
 
@@ -85,7 +85,7 @@ Do not worry about implementing the full tracking system yet.
 
 ---
 
-### Bounding Boxes
+## Bounding Boxes
 
 **Assigned to:** Tissa + Nandika
 
@@ -104,7 +104,7 @@ The object-detection model does not need to be finished for this work to begin. 
 
 ---
 
-### Backend / Database
+## Backend / Database
 
 **Assigned to:** AWS / Database Team
 

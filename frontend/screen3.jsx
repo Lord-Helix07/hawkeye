@@ -1,2 +1,3 @@
-// Visual contact lost screen.
-// Displays what the officer sees when the drone loses visual contact with the target.
+// Dashboard and Health Statistics screen.
+// Displays the dashboard and health statistics of the drone.
+// ASSIGNED TO: Ethan Nakpil
