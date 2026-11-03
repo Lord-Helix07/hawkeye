@@ -4,16 +4,53 @@ body {
   background-color: black;
   color: white;
   font-family: 'Inter', sans-serif;
-
+}
+.dashboard-page {
+  box-sizing:border-box;
+  width: 100%;
+  padding: 24px;
 }
 
+.top-boxes {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 100%;
+}
 .map-box {
-  width: 60%;
-  height: 500px;
+  flex: 1;
+  height: 600px;
   background-color: lightgray;
-  margin: 20px;
   position: relative;
   border-radius: 5px;   
+}
+.vehicle-box {
+  width: 623px;
+  flex-shrink: 0;
+  height: 300px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+  box-sizing: border-box;
+}
+.gps-box {
+  width: 623px;
+  height: 280px;
+  padding: 20px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+.gps-box h3 {
+  margin-top: 24px;
+  font-size: 20px;
+}
+
+.gps-box p {
+  color: #c6c9d2;
+  font-size: 13px;
 }
 
 .drone-marker {
@@ -35,9 +72,19 @@ body {
   padding: 5px;
   border-radius: 10px;
 }
+.bottom1-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
+  padding-top: 16px;
+}
+
 .speed-box {
-  width: 35%;
-  height: 100px;
+  flex: none;
+  width: 500px;
+  height: 120px;
+  box-sizing: border-box;
   background-color: #151515;
   border: 1px solid #333;
   border-radius: 7px;
@@ -73,19 +120,17 @@ body {
   margin-top: 7px;
   border-radius: 5px;
 }
-.bottom-boxes {
-  display: flex;
-  gap: 5px;
-  margin: 20px;
-}
+
 
 .battery-box {
-  width: 35%;
-  height: 100px;
+  flex: none;
+  width: 500px;
+  height: 120px;
+  padding: 15px;
+  box-sizing: border-box;
   background-color: #151515;
   border: 1px solid #333;
   border-radius: 7px;
-  padding: 15px;
 }
 
 .battery-box h2 {
@@ -105,4 +150,30 @@ body {
   background-color: orange;
   margin-top: 7px;
   border-radius: 5px;
+}
+.target-box {
+  height: 90px;
+  flex: 0 0 60%;
+  width: 60%;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+}
+.target-status {
+  color: #28d65c;
+  font-size: 30px;
+  margin: 0;
+}
+
+
+.accuracy,
+.accuracy-value {
+  color: #28d65c !important;
+}
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 623px;
 }
