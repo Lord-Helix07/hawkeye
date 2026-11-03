@@ -10,6 +10,18 @@ from users_store import UsernameOrEmailTaken, UsersTableSchemaError, create_user
 
 app = FastAPI()
 
+from fastapi.middleware.cors import CORSMiddleware  
+
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Stand-in database until AWS works. Maps user_id -> user info.
 # fake_users = {}
 
