@@ -5,15 +5,11 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-
-from users_store import UsernameOrEmailTaken, UsersTableSchemaError, create_user
-
-app = FastAPI()
-
 from fastapi.middleware.cors import CORSMiddleware  
-
+from users_store import BadgeNumTaken, UsersTableSchemaError, create_user
 
 app = FastAPI()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,8 +23,7 @@ app.add_middleware(
 
 
 class SignUpRequest(BaseModel):
-    username: str
-    email: str
+    badge_num: str
     password: str
 
 
@@ -40,7 +35,7 @@ def signup(request: SignUpRequest):
     #         raise HTTPException(status_code=409, detail="Username or email already taken")
 
     # generate a unique user id
-    user_id = str(uuid.uuid4())
+    #user_id = str(uuid.uuid4())
 
     # hash password
     password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
@@ -55,31 +50,27 @@ def signup(request: SignUpRequest):
 
     try:
         create_user(
-            user_id=user_id,
-            username=request.username,
-            email=request.email,
+            badge_num=request.badge_num,
             password_hash=password_hash,
         )
-    except UsernameOrEmailTaken:
-        raise HTTPException(status_code=409, detail="Username or email already taken")
+    except BadgeNumTaken:
+        raise HTTPException(status_code=409, detail="Badge number already registered")
     except UsersTableSchemaError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except (BotoCoreError, ClientError) as error:
         raise HTTPException(status_code=503, detail="Could not save the user") from error
-
     # send back user without password hash
-    return {"user_id": user_id, "username": request.username, "email": request.email}
+    return { "badge_num": request.badge_num }
 
 
 if __name__ == "__main__":
-    username = input("Username: ")
-    email = input("Email: ")
+    badge_num = input("Badge number: ")
     password = getpass("Password: ")
 
     client = TestClient(app)
     response = client.post(
         "/signup",
-        json={"username": username, "email": email, "password": password},
+        json={"badge_num": badge_num, "password": password},
     )
 
     if response.status_code == 201:

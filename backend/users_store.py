@@ -10,8 +10,8 @@ from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 
-class UsernameOrEmailTaken(Exception):
-    """A username or email uniqueness record already exists."""
+class BadgeNumTaken(Exception):
+    """A user with this badge number already exists."""
 
 
 class UsersTableSchemaError(Exception):
@@ -84,18 +84,13 @@ def ensure_users_table(dynamodb=None):
     return dynamodb.Table(table_name)
 
 
-def create_user(user_id: str, username: str, email: str, password_hash: str, dynamodb=None) -> None:
-    """Insert a user plus username and email uniqueness records.
-
-    Signup does not collect a badge number, so the profile uses user_id as badge_num.
-    Username and email each get their own item so a duplicate write fails the transaction.
+def create_user(badge_num: str, password_hash: str, dynamodb=None) -> None:
+    """Insert a user keyed by badge number. Fails if the badge number is already registered.
     """
     dynamodb = dynamodb or get_dynamodb_resource()
     ensure_users_table(dynamodb)
     client = dynamodb.meta.client
     table_name = users_table_name()
-    if _profile_exists(client, table_name, username, email):
-        raise UsernameOrEmailTaken
     created_at = _utc_now()
 
     try:
@@ -105,10 +100,8 @@ def create_user(user_id: str, username: str, email: str, password_hash: str, dyn
                     "Put": {
                         "TableName": table_name,
                         "Item": {
-                            "badge_num": user_id,
-                            "user_id": user_id,
-                            "username": username,
-                            "email": email,
+                            "badge_num": badge_num,
+
                             "password_hash": password_hash,
                             "status": "active",
                             "created_at": created_at,
@@ -116,47 +109,28 @@ def create_user(user_id: str, username: str, email: str, password_hash: str, dyn
                         "ConditionExpression": "attribute_not_exists(badge_num)",
                     }
                 },
-                {
-                    "Put": {
-                        "TableName": table_name,
-                        "Item": {
-                            "badge_num": f"USERNAME#{username}",
-                            "user_id": user_id,
-                        },
-                        "ConditionExpression": "attribute_not_exists(badge_num)",
-                    }
-                },
-                {
-                    "Put": {
-                        "TableName": table_name,
-                        "Item": {
-                            "badge_num": f"EMAIL#{email}",
-                            "user_id": user_id,
-                        },
-                        "ConditionExpression": "attribute_not_exists(badge_num)",
-                    }
-                },
+                
             ]
         )
     except client.exceptions.TransactionCanceledException as error:
         reasons = error.response.get("CancellationReasons", [])
         if any(reason.get("Code") == "ConditionalCheckFailed" for reason in reasons):
-            raise UsernameOrEmailTaken from error
+            raise BadgeNumTaken from error
         raise
 
 
-def _profile_exists(client, table_name: str, username: str, email: str) -> bool:
-    """Find users loaded before uniqueness records existed."""
-    paginator = client.get_paginator("scan")
-    for page in paginator.paginate(
-        TableName=table_name,
-        FilterExpression="username = :username OR email = :email",
-        ExpressionAttributeValues={":username": username, ":email": email},
-        ProjectionExpression="badge_num",
-    ):
-        if page.get("Items"):
-            return True
-    return False
+# def _profile_exists(client, table_name: str, username: str, email: str) -> bool:
+#     """Find users loaded before uniqueness records existed."""
+#     paginator = client.get_paginator("scan")
+#     for page in paginator.paginate(
+#         TableName=table_name,
+#         FilterExpression="username = :username OR email = :email",
+#         ExpressionAttributeValues={":username": username, ":email": email},
+#         ProjectionExpression="badge_num",
+#     ):
+#         if page.get("Items"):
+#             return True
+#     return False
 
 
 def _utc_now() -> str:
