@@ -12,6 +12,7 @@ TABLE_NAME = os.getenv("MISSIONS_TABLE", "Missions")
 
 
 def response(status_code, body):
+    # This is the format API Gateway sends back to the frontend.
     return {
         "statusCode": status_code,
         "headers": {
@@ -25,7 +26,7 @@ def response(status_code, body):
 
 
 def get_mission_id(event):
-    """Read mission_id from direct Lambda, API Gateway body, or path parameters."""
+    """Get the mission ID from the request."""
     if event.get("mission_id"):
         return str(event["mission_id"]).strip()
 
@@ -43,14 +44,17 @@ def get_mission_id(event):
 
 
 def lambda_handler(event, context):
-    """Submit one launch request and update the Missions DynamoDB row."""
+    """Handle the launch request and update the Missions row."""
+    # Handle the browser's preflight request before the real launch request.
     if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
         return response(200, {"message": "CORS preflight accepted"})
 
+    # Get the mission ID before checking the database.
     mission_id = get_mission_id(event)
     if not mission_id:
         return response(400, {"error": "Mission ID is required"})
 
+    # Lambda uses its AWS permissions to access DynamoDB.
     table = boto3.resource("dynamodb").Table(TABLE_NAME)
 
     try:
@@ -58,21 +62,26 @@ def lambda_handler(event, context):
         if mission is None:
             return response(404, {"error": f"Mission '{mission_id}' was not found"})
 
+        # A mission needs a drone assigned before it can launch.
         drone_id = mission.get("assigned_drone_id")
         if not drone_id:
             return response(409, {"error": "Launch rejected: no drone is assigned"})
 
+        # Only check readiness if the mission has that field.
         readiness = mission.get("drone_status", mission.get("drone_readiness"))
         if readiness is not None and str(readiness).upper() not in {"READY", "IDLE", "ASSIGNED"}:
             return response(409, {"error": f"Launch rejected: drone '{drone_id}' is not ready"})
 
+        # Do not launch a mission that already started or already has a request.
         status = str(mission.get("status", "")).lower()
         if status == "launch_requested" or mission.get("launch_request_timestamp"):
             return response(409, {"error": "Launch rejected: request already exists"})
         if status in {"active", "completed", "aborted", "failed"}:
             return response(409, {"error": f"Launch rejected: mission status is '{mission.get('status')}'"})
 
+        # Save the request time in UTC.
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        # This condition stops duplicate requests from updating the same mission.
         updated = table.update_item(
             Key={"mission_id": mission_id},
             UpdateExpression="SET #status = :requested, launch_request_timestamp = :timestamp",

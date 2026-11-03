@@ -1,17 +1,7 @@
-"""Simple local tester for the launch Lambda."""
+"""Command-line version of the future Launch Drone button."""
 
-import json
-
-from lambda_function import lambda_handler
+from launch_button import main
 
 
-mission_id = input("Mission ID: ").strip()
-result = lambda_handler({"mission_id": mission_id}, None)
-body = json.loads(result["body"])
-
-if result["statusCode"] == 200:
-    print("Updated Missions row:")
-    print(json.dumps(body["mission"], indent=2, default=str))
-    print(body["message"])
-else:
-    print(f"Error: {body.get('error', body)}")
+if __name__ == "__main__":
+    main()

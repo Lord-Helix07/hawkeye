@@ -6,6 +6,7 @@ import boto3
 
 
 def get_missions_table():
+    # Use DynamoDB Local if an endpoint is provided. Otherwise use AWS DynamoDB.
     options = {"region_name": os.getenv("AWS_REGION", "us-east-1")}
     endpoint = os.getenv("DYNAMODB_ENDPOINT")
     if endpoint:
