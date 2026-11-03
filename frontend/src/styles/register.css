@@ -1,0 +1,2 @@
+/* Register looks the same as Login, so reuse its styles. */
+@import './login.css';

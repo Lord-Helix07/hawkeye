@@ -34,7 +34,6 @@ def create_mission():
     identifying_features = get_required_input(
         "Identifying features: "
     )
-
     latitude = get_number("Requested launch latitude: ")
     longitude = get_number("Requested launch longitude: ")
 

@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+body {
+  margin: 0;
+  background-color: black;
+  color: white;
+  font-family: 'Inter', sans-serif;
+
+}
+
+.map-box {
+  width: 60%;
+  height: 500px;
+  background-color: lightgray;
+  margin: 20px;
+  position: relative;
+  border-radius: 5px;   
+}
+
+.drone-marker {
+  width: 14px;
+  height: 14px;
+  background-color: red;
+  border-radius: 50%;
+  position: absolute;
+  left: 40%;
+  top: 54%;
+}
+
+.drone-text {
+  background-color: #8ea6d6;
+  color: white;
+  position: absolute;
+  left: 40%;
+  top: 55%;
+  padding: 5px;
+  border-radius: 10px;
+}
+.speed-box {
+  width: 35%;
+  height: 100px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+}
+
+.box-title {
+  color: #9ca3b5;
+  font-size: 12px;
+  margin: 0;
+}
+
+.speed-box h2 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+
+.speed-box h2 span {
+  font-size: 14px;
+  color: #9ca3b5;
+}
+
+.speed-status {
+  color: #28d65c;
+  font-size: 11px;
+  margin: 0;
+}
+
+.speed-line {
+  width: 100%;
+  height: 4px;
+  background-color: #28d65c;
+  margin-top: 7px;
+  border-radius: 5px;
+}
+.bottom-boxes {
+  display: flex;
+  gap: 5px;
+  margin: 20px;
+}
+
+.battery-box {
+  width: 35%;
+  height: 100px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+}
+
+.battery-box h2 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+
+.battery-status {
+  color: orange;
+  font-size: 11px;
+  margin: 0;
+}
+
+.battery-line {
+  width: 25%;
+  height: 4px;
+  background-color: orange;
+  margin-top: 7px;
+  border-radius: 5px;
+}
