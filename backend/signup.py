@@ -12,9 +12,11 @@ fake_users = {}
 
 
 class SignUpRequest(BaseModel):
+    badge_num: str
     username: str
-    email: str
     password: str
+    name: str
+    officer_unit: str
 
 
 @app.post("/signup", status_code=201)
