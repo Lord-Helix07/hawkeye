@@ -1,5 +1,7 @@
 fastapi
 uvicorn
+boto3
+bcrypt
 ultralytics
 opencv-python
 pytest
