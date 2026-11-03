@@ -29,6 +29,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 # FastAPI creates the API application.
 # HTTPException allows us to return clear HTTP error messages.
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 # jsonable_encoder converts DynamoDB data into a format that
 # FastAPI can safely return as JSON.
@@ -44,6 +45,14 @@ from database.database import get_dynamodb_resource
 # The title appears in the automatic FastAPI documentation
 # available at http://127.0.0.1:8000/docs.
 app = FastAPI(title="View Mission Status API")
+
+# Allow the React frontend (Vite dev server) to call this API from the browser.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/missions/{mission_id}")
