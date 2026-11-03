@@ -49,7 +49,7 @@ export default function Deploy() {
 
       <main className="deploy-main">
         <div className="deploy-title">
-          <h1>Target vehicle</h1>
+          <h1>Target Vehicle</h1>
           <p>Provide details below to start mission</p>
           <span className="mission-id">
             MISSION: <strong>{missionId}</strong>
