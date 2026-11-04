@@ -26,9 +26,12 @@ import uvicorn
 # These exceptions allow us to handle DynamoDB connection problems.
 from botocore.exceptions import BotoCoreError, ClientError
 
+from decimal import Decimal
+
 # FastAPI creates the API application.
 # HTTPException allows us to return clear HTTP error messages.
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 # jsonable_encoder converts DynamoDB data into a format that
@@ -38,6 +41,10 @@ from fastapi.encoders import jsonable_encoder
 # This function already exists in backend/database.py.
 # It creates the connection to AWS DynamoDB or DynamoDB Local.
 from database.database import get_dynamodb_resource
+
+# Mission numbers (0001, 0002, ...) and saving new missions.
+from create_mission import create_mission_record
+from mission_numbers import format_mission_number, peek_next_mission_number
 
 
 # Create the FastAPI application.
@@ -53,6 +60,66 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# The JSON body the Deploy page sends to create a mission.
+# min_length=1 means the field can't be empty (FastAPI answers 422 instead).
+class CreateMissionRequest(BaseModel):
+    make: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    color: str = Field(min_length=1)
+    license_plate: str = Field(min_length=1)
+    vehicle_type: str | None = None
+    identifying_features: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+# This route must stay ABOVE /missions/{mission_id}, otherwise FastAPI would
+# treat "next-number" as a mission ID.
+@app.get("/missions/next-number")
+def get_next_mission_number():
+    """Preview of the number the next mission will get (shown on the Deploy page)."""
+    try:
+        number = peek_next_mission_number()
+    except (BotoCoreError, ClientError) as error:
+        raise HTTPException(status_code=503, detail=f"Database error: {error}")
+
+    return {
+        "next_mission_number": number,
+        "next_mission_id": format_mission_number(number),
+    }
+
+
+@app.post("/missions", status_code=201)
+def create_mission_endpoint(request: CreateMissionRequest):
+    """Create a mission with the next mission number and return the saved row."""
+    target_vehicle = {
+        "make": request.make.strip(),
+        "model": request.model.strip(),
+        "color": request.color.strip(),
+        "license_plate": request.license_plate.strip(),
+    }
+    # optional fields are only saved when the frontend sends them
+    if request.vehicle_type:
+        target_vehicle["type"] = request.vehicle_type.strip()
+    if request.identifying_features:
+        target_vehicle["identifying_features"] = request.identifying_features.strip()
+
+    request_location = None
+    if request.latitude is not None and request.longitude is not None:
+        # DynamoDB needs Decimal, not float
+        request_location = {
+            "latitude": Decimal(str(request.latitude)),
+            "longitude": Decimal(str(request.longitude)),
+        }
+
+    try:
+        mission = create_mission_record(target_vehicle, request_location)
+    except (BotoCoreError, ClientError) as error:
+        raise HTTPException(status_code=503, detail=f"Database error: {error}")
+
+    return jsonable_encoder(mission)
 
 
 @app.get("/missions/{mission_id}")

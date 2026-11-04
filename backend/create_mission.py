@@ -1,16 +1,16 @@
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from uuid import uuid4
 
 from database.database import get_dynamodb_resource
+from mission_numbers import format_mission_number, take_next_mission_number
 
 def get_required_input(question):
     while True:
         answer = input(question).strip()
-        
+
         if answer!= "":
             return answer
-        
+
         print("This field is required.")
 
 def get_number(question):
@@ -21,6 +21,35 @@ def get_number(question):
             return Decimal(answer)
         except InvalidOperation:
             print("Please enter a valid number.")
+
+
+def create_mission_record(target_vehicle, request_location=None, dynamodb=None):
+    """Save a new mission with the next mission number and return it.
+
+    Used by the terminal prompt below and by POST /missions in view_mission_status.py.
+    mission_id is the 4-digit number as text ("0001"), so it reads well on screen.
+    """
+    dynamodb = dynamodb or get_dynamodb_resource()
+
+    mission_number = take_next_mission_number(dynamodb)
+
+    mission = {
+        "mission_id": format_mission_number(mission_number),
+        "mission_number": mission_number,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": "pending",
+        "target_vehicle": target_vehicle,
+    }
+    if request_location:
+        mission["request_location"] = request_location
+
+    # the condition is a safety net: never overwrite an existing mission
+    dynamodb.Table("Missions").put_item(
+        Item=mission,
+        ConditionExpression="attribute_not_exists(mission_id)",
+    )
+    return mission
+
 
 def create_mission():
     print("Create a New Mission")
@@ -38,36 +67,21 @@ def create_mission():
     latitude = get_number("Requested launch latitude: ")
     longitude = get_number("Requested launch longitude: ")
 
-    mission_id = "msn-" + uuid4().hex[:8]
-
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    mission = {
-        "mission_id": mission_id,
-        "created_at": created_at,
-        "status": "pending",
-
-        "target_vehicle": {
-            "make": make,
-            "model": model,
-            "color": color,
-            "type": vehicle_type,
-            "license_plate": license_plate,
-            "identifying_features": identifying_features
-        },
-
-        "request_location": {
-            "latitude": latitude,
-            "longitude": longitude
-        }
-    }
-
     try:
-        dynamodb = get_dynamodb_resource()
-
-        missions_table = dynamodb.Table("Missions")
-
-        missions_table.put_item(Item=mission)
+        mission = create_mission_record(
+            target_vehicle={
+                "make": make,
+                "model": model,
+                "color": color,
+                "type": vehicle_type,
+                "license_plate": license_plate,
+                "identifying_features": identifying_features
+            },
+            request_location={
+                "latitude": latitude,
+                "longitude": longitude
+            },
+        )
 
         print("\nMission created successfully!")
         print(mission)
@@ -78,4 +92,3 @@ def create_mission():
 
 if __name__ == "__main__":
     create_mission()
-
