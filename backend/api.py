@@ -36,7 +36,7 @@ app.include_router(signup_router)  # POST /signup
 app.include_router(missions_router)  # /missions/...
 
 
-@app.get("/health")
-def health():
-    """Quick check that the server is running: http://localhost:8000/health"""
-    return {"status": "ok"}
+@app.get("/server-status")
+def server_status():
+    """Quick check that the backend is running: http://localhost:8000/server-status"""
+    return {"status": "running"}
