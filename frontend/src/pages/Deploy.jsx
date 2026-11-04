@@ -64,6 +64,11 @@ export default function Deploy() {
           <span className="deploy-logo-placeholder" aria-hidden="true" />
           Hawkeye
         </span>
+        {/* TESTING: opens the camera test page */}
+        <button className="live-btn" onClick={() => navigate('/camera')}>
+          <span className="live-dot" aria-hidden="true" />
+          Live feed
+        </button>
       </header>
 
       <main className="deploy-main">

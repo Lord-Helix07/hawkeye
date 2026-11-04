@@ -23,6 +23,73 @@
   flex-shrink: 0;
 }
 
+/* "Live feed" button (testing): opens the camera test page.
+   Coral outline + pulsing dot = live video */
+.live-btn {
+  --live: #ff5370; /* neon coral red */
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 28px 0 22px;
+  background-color: transparent;
+  border: 2px solid var(--live);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.live-btn:hover {
+  background-color: var(--live);
+  color: #0a0a0b;
+  box-shadow: 0 0 18px rgba(255, 83, 112, 0.55);
+}
+
+.live-dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--live);
+  flex-shrink: 0;
+}
+
+/* a ring that grows and fades out from the dot, over and over */
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-color: var(--live);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+
+.live-btn:hover .live-dot,
+.live-btn:hover .live-dot::after {
+  background-color: #0a0a0b;
+}
+
+@keyframes live-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after {
+    animation: none;
+  }
+}
+
 /* ---------- one centered column holds everything below the header ---------- */
 .deploy-main {
   box-sizing: border-box;
