@@ -16,20 +16,20 @@ export default function Register() {
   }
 
   return (
-    <main className="auth-page">
+    <main className="auth-page register-page">
       <h1 className="auth-title">Register for Hawkeye</h1>
 
       <form className="auth-form" onSubmit={handleRegister}>
         <input
           className="auth-input"
-          placeholder="Badge number..."
+          placeholder="Badge Number..."
           value={badge}
           onChange={(e) => setBadge(e.target.value)}
         />
         <input
           className="auth-input"
           type="password"
-          placeholder="Officer Password..."
+          placeholder="Password..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

@@ -22,14 +22,14 @@ export default function Login() {
       <form className="auth-form" onSubmit={handleLogin}>
         <input
           className="auth-input"
-          placeholder="Badge number..."
+          placeholder="Badge Number..."
           value={badge}
           onChange={(e) => setBadge(e.target.value)}
         />
         <input
           className="auth-input"
           type="password"
-          placeholder="Officer Password..."
+          placeholder="Password..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

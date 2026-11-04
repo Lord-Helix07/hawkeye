@@ -1,2 +1,10 @@
 /* Register looks the same as Login, so reuse its styles. */
 @import './login.css';
+
+/* Register-only styles. Start each rule with .register-page so it
+   doesn't change the Login page (all page CSS loads at the same time). */
+
+/* "Sign in." link */
+.register-page .auth-switch button {
+  color: #5EF1F2;
+}

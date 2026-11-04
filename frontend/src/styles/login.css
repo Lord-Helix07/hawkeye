@@ -1,16 +1,19 @@
-/* Login and Register look the same, so register.css reuses these styles. */
 
-/* everything stacked in the middle of the page */
+/* everything stacked in the middle of the page, centered both ways */
 .auth-page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 180px;
+  justify-content: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+  /* 20px more padding at the bottom than the top shifts the content 10px up */
+  padding: 24px 24px 44px;
 }
 
 .auth-title {
   margin: 0 0 48px;
-  font-size: 30px;
+  font-size: 40px;
   font-weight: 400;
 }
 
@@ -41,19 +44,19 @@
   outline: 2px solid #ffffff;
 }
 
-/* small "Don't have an account? Register now." line */
+/* "Don't have an account? line */
 .auth-switch {
   margin-top: 54px;
-  font-size: 11px;
+  font-size: 20px;
 }
 
-/* the link part: bold, underlined, looks like text not a button */
+/* register now link  */
 .auth-switch button {
   background: none;
   border: none;
   padding: 0;
-  color: #ffffff;
-  font-size: 11px;
+  color: #FF79C6;
+  font-size: 20px;
   font-weight: 700;
   text-decoration: underline;
   cursor: pointer;

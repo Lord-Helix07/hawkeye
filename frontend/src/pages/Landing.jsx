@@ -2,40 +2,104 @@
 import '../styles/landing.css'
 import { useNavigate } from 'react-router-dom'
 
+const activity = [
+  { time: '21:04:12', text: 'Officer input data: [silver sedan], [JLS24K], [northbound]' },
+  { time: '21:06:24', text: 'Hawkeye-02 deployed' },
+  { time: '21:07:48', text: 'Hawkeye reached optimal height' },
+]
+
+// small helpers to color the code preview
+const K = ({ children }) => <span className="code-keyword">{children}</span>
+const S = ({ children }) => <span className="code-string">{children}</span>
+
+// mark: '+' added line, '-' removed line, '' unchanged. indent = number of spaces
+const codeLines = [
+  { mark: '', indent: 0, code: <>target = vehicle(plate = <S>"[JLS24K]"</S>,</> },
+  { mark: '', indent: 17, code: <>color = <S>"silver"</S>, body = <S>"sedan"</S>)</> },
+  { mark: '', indent: 0, code: '' },
+  { mark: '', indent: 0, code: <><K>for</K> frame <K>in</K> camera.stream():</> },
+  { mark: '', indent: 4, code: <><K>for</K> car <K>in</K> find_cars(frame):</> },
+  { mark: '-', indent: 8, code: <><K>if</K> car.color == target.color:</> },
+  { mark: '+', indent: 12, code: <>plate = read_plate(car)</> },
+  { mark: '+', indent: 12, code: <><K>if</K> plate == target.plate:</> },
+  { mark: '', indent: 16, code: <>drone.lock(car)</> },
+  { mark: '+', indent: 8, code: <><K>elif</K> looks_like(car, target):</> },
+  { mark: '+', indent: 12, code: <>officer.confirm(car)</> },
+]
+
+const sidebarItems = ['Live feed', 'Missions', 'Drones', 'Alerts']
+
 export default function Landing() {
   const navigate = useNavigate()
 
   return (
-    <>
+    <div className="landing">
       <header className="landing-header">
         <span className="landing-logo">Hawkeye</span>
         <div className="landing-auth">
-          <button className="login-btn" onClick={() => navigate('/login')}>Login</button>
+          <button className="login-btn" onClick={() => navigate('/login')}>Log in</button>
           <button className="signup-btn" onClick={() => navigate('/register')}>Sign up</button>
         </div>
       </header>
-      <h1>The Autonomous pursuit drone for officers and the communities they protect</h1>
-      <h3>Built to catch fleeing vehicles. Designed to keep chases off the streets. <div className="new-loop">New <span className="gray-text"> Loops &rarr;</span></div></h3>
-      <div className="target-selection">
-      <h4>Target lock: silver grey sedan, northbound</h4>
 
-      <h5>Activity</h5>
-      <p>21:04:12 Officer input data: [silver sedan], [JLS24K], [northbound]</p>
-      <p>21:06:24 Hawkeye-02 deployed</p>
-      <p>21:07:48 Hawkeye reached optimal height</p>
+      <main className="landing-hero">
+        <h1 className="hero-title">
+          The autonomous pursuit drone
+          <br />
+          for officers and the communities they protect
+        </h1>
 
-      <p className="font-mono small-text">target = vehicle(plate = <span className="yellow-text">"[JLS24K]"</span>,</p>
-      <p className="font-mono small-text">color = <span className="yellow-text">"[silver]"</span>, body = <span className="yellow-text">"[sedan]"</span>)</p>
+        <div className="hero-subrow">
+          <p className="hero-subtitle">
+            Eyes in the sky for every pursuit. Fewer high-speed chases on the streets.
+          </p>
+       
+        </div>
+      </main>
 
-      <p className="font-mono small-text"><span className="purple-text">for</span> frame <span className="purple-text">in</span> camera.stream():</p>
-      <p className="font-mono small-text"><span className="purple-text">for</span> car <span className="purple-text">in</span> find_cars(frame):</p>
-      <p className="font-mono small-text"><span className="purple-text">if</span> car.color == target.color:</p>
-      <p className="font-mono small-text">plate = read_plate(car)</p>
-      <p className="font-mono small-text"><span className="purple-text">if</span> plate == target.plate:</p>
-      <p className="font-mono small-text">drone.ring_sirens()</p>
-      <p className="font-mono small-text"><span className="purple-text">elif</span> looks_like(car, target):</p>
-      <p className="font-mono small-text">officer.confirm(car)</p>
-      </div>
-    </>
+      {/* app-window preview */}
+      <section className="console" aria-label="Hawkeye mission preview">
+        <aside className="console-sidebar">
+          <p className="console-brand">Hawkeye</p>
+          {sidebarItems.map((item) => (
+            <p key={item} className={item === 'Live feed' ? 'console-item active' : 'console-item'}>
+              {item}
+            </p>
+          ))}
+          <p className="console-section">Active drones</p>
+          <p className="console-item">
+            <span className="status-dot" /> Hawkeye-02
+          </p>
+        </aside>
+
+        <div className="console-main">
+          <p className="console-crumb">HWK-07-2410 · Live pursuit</p>
+
+          <h2 className="console-title">Target lock: silver sedan, northbound</h2>
+
+          <h3 className="console-heading">Activity</h3>
+          <ul className="activity-list">
+            {activity.map((entry) => (
+              <li key={entry.time}>
+                <span className="activity-time">{entry.time}</span>
+                <span>{entry.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <pre className="code-block">
+            {codeLines.map((line, i) => (
+              <div key={i} className={`code-line ${line.mark === '+' ? 'added' : ''} ${line.mark === '-' ? 'removed' : ''}`}>
+                <span className="code-mark">{line.mark}</span>
+                <code>
+                  {' '.repeat(line.indent)}
+                  {line.code}
+                </code>
+              </div>
+            ))}
+          </pre>
+        </div>
+      </section>
+    </div>
   )
 }
