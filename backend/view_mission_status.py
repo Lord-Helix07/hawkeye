@@ -30,9 +30,8 @@ from decimal import Decimal
 
 # FastAPI creates the API application.
 # HTTPException allows us to return clear HTTP error messages.
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from fastapi.middleware.cors import CORSMiddleware
 
 # jsonable_encoder converts DynamoDB data into a format that
 # FastAPI can safely return as JSON.
@@ -47,19 +46,9 @@ from create_mission import create_mission_record
 from mission_numbers import format_mission_number, peek_next_mission_number
 
 
-# Create the FastAPI application.
-#
-# The title appears in the automatic FastAPI documentation
-# available at http://127.0.0.1:8000/docs.
-app = FastAPI(title="View Mission Status API")
-
-# Allow the React frontend (Vite dev server) to call this API from the browser.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The mission routes. They're plugged into the one backend app in api.py
+# (start it with: uvicorn api:app --reload --port 8000).
+router = APIRouter(tags=["missions"])
 
 
 # The JSON body the Deploy page sends to create a mission.
@@ -77,7 +66,7 @@ class CreateMissionRequest(BaseModel):
 
 # This route must stay ABOVE /missions/{mission_id}, otherwise FastAPI would
 # treat "next-number" as a mission ID.
-@app.get("/missions/next-number")
+@router.get("/missions/next-number")
 def get_next_mission_number():
     """Preview of the number the next mission will get (shown on the Deploy page)."""
     try:
@@ -91,7 +80,7 @@ def get_next_mission_number():
     }
 
 
-@app.post("/missions", status_code=201)
+@router.post("/missions", status_code=201)
 def create_mission_endpoint(request: CreateMissionRequest):
     """Create a mission with the next mission number and return the saved row."""
     target_vehicle = {
@@ -122,7 +111,7 @@ def create_mission_endpoint(request: CreateMissionRequest):
     return jsonable_encoder(mission)
 
 
-@app.get("/missions/{mission_id}")
+@router.get("/missions/{mission_id}")
 def get_mission_status(mission_id: str):
 
     # Remove accidental spaces before or after the Mission ID.
@@ -197,6 +186,9 @@ def start_api():
     DynamoDB Local uses port 8001, while FastAPI uses port 8000.
     These are separate services, so they do not conflict.
     """
+
+    # the one combined backend app (imported here to avoid a circular import)
+    from api import app
 
     # Create the Uvicorn server configuration.
     server_config = uvicorn.Config(

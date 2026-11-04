@@ -2,21 +2,13 @@ from getpass import getpass
 import uuid
 import bcrypt
 from botocore.exceptions import BotoCoreError, ClientError
-from fastapi import FastAPI, HTTPException
-from fastapi.testclient import TestClient
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware  
 from users_store import BadgeNumTaken, UsersTableSchemaError, create_user
 
-app = FastAPI()
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# The sign-up routes. They're plugged into the one backend app in api.py
+# (start it with: uvicorn api:app --reload --port 8000).
+router = APIRouter(tags=["users"])
 
 # Stand-in database until AWS works. Maps user_id -> user info.
 # fake_users = {}
@@ -27,7 +19,7 @@ class SignUpRequest(BaseModel):
     password: str
 
 
-@app.post("/signup", status_code=201)
+@router.post("/signup", status_code=201)
 def signup(request: SignUpRequest):
     # check for duplicates
     # for user in fake_users.values():
@@ -66,6 +58,9 @@ def signup(request: SignUpRequest):
 if __name__ == "__main__":
     badge_num = input("Badge number: ")
     password = getpass("Password: ")
+
+    from fastapi.testclient import TestClient
+    from api import app
 
     client = TestClient(app)
     response = client.post(
