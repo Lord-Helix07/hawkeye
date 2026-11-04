@@ -106,6 +106,14 @@
   border-color: #ffffff;
 }
 
+/* error message above the buttons (e.g. empty fields or backend not running) */
+.deploy-error {
+  margin: 16px 0 0;
+  color: #ff8a8a;
+  font-size: 15px;
+  text-align: right;
+}
+
 .deploy-actions {
   display: flex;
   justify-content: flex-end;

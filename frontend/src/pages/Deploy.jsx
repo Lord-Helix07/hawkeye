@@ -1,7 +1,8 @@
 // page to launch the drone
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/deploy.css'
+import { createMission, fetchNextMissionId } from '../services/missionNumbers.js'
 
 const emptyForm = { make: '', model: '', color: '', direction: '', plate: '' }
 
@@ -17,17 +18,43 @@ export default function Deploy() {
   const navigate = useNavigate()
   const [form, setForm] = useState(emptyForm)
 
-  // placeholder until the backend creates real mission IDs
-  const missionId = 'HWK-07-2410'
+  // preview of the number this mission will get, e.g. "0003" (null while loading)
+  const [nextMissionId, setNextMissionId] = useState(null)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  // ask the backend for the next mission number when the page opens
+  useEffect(() => {
+    let cancelled = false
+    fetchNextMissionId()
+      .then((id) => {
+        if (!cancelled) setNextMissionId(id)
+      })
+      .catch(() => {
+        if (!cancelled) setError('Could not reach the server. Is the backend running?')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  function handleDeploy(e) {
+  async function handleDeploy(e) {
     e.preventDefault()
-    // TODO: send `form` to the backend to start the mission
-    navigate('/dashboard')
+    if (submitting) return
+    setError('')
+    setSubmitting(true)
+    try {
+      // the backend saves the mission and gives it the next number
+      const mission = await createMission(form)
+      navigate(`/dashboard/${mission.mission_id}`)
+    } catch (err) {
+      setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message)
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -52,7 +79,7 @@ export default function Deploy() {
           <h1>Target Vehicle</h1>
           <p>Provide details below to start mission</p>
           <span className="mission-id">
-            MISSION: <strong>{missionId}</strong>
+            Mission: <strong>{nextMissionId ?? '----'}</strong>
           </span>
         </div>
 
@@ -66,12 +93,18 @@ export default function Deploy() {
             ))}
           </div>
 
+          {error && (
+            <p className="deploy-error" role="alert">
+              {error}
+            </p>
+          )}
+
           <div className="deploy-actions">
             <button type="button" className="clear-btn" onClick={() => setForm(emptyForm)}>
               Clear
             </button>
-            <button type="submit" className="deploy-btn">
-              Deploy Drone <span aria-hidden="true">→</span>
+            <button type="submit" className="deploy-btn" disabled={submitting}>
+              {submitting ? 'Deploying…' : 'Deploy Drone'} <span aria-hidden="true">→</span>
             </button>
           </div>
         </form>

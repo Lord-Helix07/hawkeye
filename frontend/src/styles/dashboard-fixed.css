@@ -1,0 +1,175 @@
+/* TEACHING COPY of the original dashboard.css: every size is fixed pixels.
+   Compare with dashboard.css, which uses fr, flex and aspect-ratio. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+.fixed-dashboard-page {
+  box-sizing:border-box;
+  width: 100%;
+  padding: 24px;
+}
+
+.fixed-top-boxes {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  width: 100%;
+}
+.fixed-map-box {
+  flex: 1;
+  height: 600px;
+  background-color: lightgray;
+  position: relative;
+  border-radius: 5px;   
+}
+.fixed-vehicle-box {
+  width: 623px;
+  flex-shrink: 0;
+  height: 300px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+  box-sizing: border-box;
+}
+.fixed-gps-box {
+  width: 623px;
+  height: 280px;
+  padding: 20px;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+.fixed-gps-box h3 {
+  margin-top: 24px;
+  font-size: 20px;
+}
+
+.fixed-gps-box p {
+  color: #c6c9d2;
+  font-size: 13px;
+}
+
+.fixed-drone-marker {
+  width: 14px;
+  height: 14px;
+  background-color: red;
+  border-radius: 50%;
+  position: absolute;
+  left: 40%;
+  top: 54%;
+}
+
+.fixed-drone-text {
+  background-color: #8ea6d6;
+  color: white;
+  position: absolute;
+  left: 40%;
+  top: 55%;
+  padding: 5px;
+  border-radius: 10px;
+}
+.fixed-bottom1-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
+  padding-top: 16px;
+}
+
+.fixed-speed-box {
+  flex: none;
+  width: 500px;
+  height: 120px;
+  box-sizing: border-box;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+}
+
+.fixed-box-title {
+  color: #9ca3b5;
+  font-size: 12px;
+  margin: 0;
+}
+
+.fixed-speed-box h2 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+
+.fixed-speed-box h2 span {
+  font-size: 14px;
+  color: #9ca3b5;
+}
+
+.fixed-speed-status {
+  color: #28d65c;
+  font-size: 11px;
+  margin: 0;
+}
+
+.fixed-speed-line {
+  width: 100%;
+  height: 4px;
+  background-color: #28d65c;
+  margin-top: 7px;
+  border-radius: 5px;
+}
+
+
+.fixed-battery-box {
+  flex: none;
+  width: 500px;
+  height: 120px;
+  padding: 15px;
+  box-sizing: border-box;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+}
+
+.fixed-battery-box h2 {
+  font-size: 30px;
+  margin: 8px 0;
+}
+
+.fixed-battery-status {
+  color: orange;
+  font-size: 11px;
+  margin: 0;
+}
+
+.fixed-battery-line {
+  width: 25%;
+  height: 4px;
+  background-color: orange;
+  margin-top: 7px;
+  border-radius: 5px;
+}
+.fixed-target-box {
+  height: 90px;
+  flex: 0 0 60%;
+  width: 60%;
+  background-color: #151515;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 15px;
+}
+.fixed-target-status {
+  color: #28d65c;
+  font-size: 30px;
+  margin: 0;
+}
+
+
+.fixed-accuracy,
+.fixed-accuracy-value {
+  color: #28d65c !important;
+}
+.fixed-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 623px;
+}

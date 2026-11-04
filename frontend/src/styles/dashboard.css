@@ -1,179 +1,355 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 body {
   margin: 0;
   background-color: black;
   color: white;
   font-family: 'Inter', sans-serif;
 }
+
+/* shared colors, so every card matches */
 .dashboard-page {
-  box-sizing:border-box;
-  width: 100%;
-  padding: 24px;
+  --card-bg: #121316;
+  --card-border: #26282d;
+  --row-border: #1d1f23;
+  --muted: #9ca3b5;
+  --good: #28d65c;
+  --warn: #f5a524;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  background-color: #0a0a0b;
 }
 
-.top-boxes {
+/* ---------- top bar ---------- */
+.dashboard-header {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  width: 100%;
-}
-.map-box {
-  flex: 1;
-  height: 600px;
-  background-color: lightgray;
-  position: relative;
-  border-radius: 5px;   
-}
-.vehicle-box {
-  width: 623px;
-  flex-shrink: 0;
-  height: 300px;
-  background-color: #151515;
-  border: 1px solid #333;
-  border-radius: 7px;
-  padding: 15px;
-  box-sizing: border-box;
-}
-.gps-box {
-  width: 623px;
-  height: 280px;
-  padding: 20px;
-  background-color: #151515;
-  border: 1px solid #333;
-  border-radius: 7px;
-  box-sizing: border-box;
-}
-.gps-box h3 {
-  margin-top: 24px;
-  font-size: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background-color: #121316;
+  border-bottom: 1px solid var(--card-border);
 }
 
-.gps-box p {
-  color: #c6c9d2;
+/* mission ID on the right of the top bar */
+.mission-label {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
   font-size: 13px;
+}
+
+/* "Waiting for telemetry..." before the first data arrives */
+.dashboard-message {
+  margin: 48px 24px;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* red banner when a refresh fails (the last good data stays on screen) */
+.dashboard-alert {
+  margin: 16px 24px 0;
+  padding: 10px 14px;
+  background-color: rgba(235, 87, 87, 0.12);
+  border: 1px solid rgba(235, 87, 87, 0.4);
+  border-radius: 8px;
+  color: #ff8a8a;
+  font-size: 14px;
+}
+
+/* "Flight Status" heading */
+.flight-status-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+}
+
+/* ---------- two-column layout ---------- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr; /* map side is ~1.8x the right side */
+  gap: 16px;
+  padding: 16px 24px 24px;
+  align-items: stretch;
+}
+
+.left-column,
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ---------- cards ---------- */
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.card-body {
+  padding: 18px;
+}
+
+.box-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.good {
+  color: var(--good);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+/* ---------- map ---------- */
+.map-box {
+  position: relative;
+  aspect-ratio: 970 / 625; /* same shape as the mockup's map */
+  background-color: #d9d9d9;
+  /* light street-grid pattern until a real map is added */
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.7) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.7) 2px, transparent 2px);
+  background-size: 80px 80px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* marker + label move together; left/top are set from the GPS position */
+.drone-pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -7px); /* center the dot on the exact position */
+  transition: left 1s linear, top 1s linear; /* glide between updates */
 }
 
 .drone-marker {
   width: 14px;
   height: 14px;
-  background-color: red;
+  background-color: #d11a1a;
+  border: 2px solid #ffffff;
   border-radius: 50%;
-  position: absolute;
-  left: 40%;
-  top: 54%;
 }
 
 .drone-text {
-  background-color: #8ea6d6;
-  color: white;
-  position: absolute;
-  left: 40%;
-  top: 55%;
-  padding: 5px;
-  border-radius: 10px;
-}
-.bottom1-boxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  width: 100%;
-  padding-top: 16px;
-}
-
-.speed-box {
-  flex: none;
-  width: 500px;
-  height: 120px;
-  box-sizing: border-box;
-  background-color: #151515;
-  border: 1px solid #333;
-  border-radius: 7px;
-  padding: 15px;
-}
-
-.box-title {
-  color: #9ca3b5;
-  font-size: 12px;
   margin: 0;
-}
-
-.speed-box h2 {
-  font-size: 30px;
-  margin: 8px 0;
-}
-
-.speed-box h2 span {
+  white-space: nowrap;
+  padding: 4px 8px;
+  background-color: rgba(120, 150, 210, 0.85);
+  border-radius: 6px;
+  color: #ffffff;
   font-size: 14px;
-  color: #9ca3b5;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
-.speed-status {
-  color: #28d65c;
-  font-size: 11px;
+/* live coordinates in the corner of the map */
+.map-coords {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
   margin: 0;
+  padding: 4px 8px;
+  background-color: rgba(10, 10, 11, 0.75);
+  border-radius: 6px;
+  color: #ffffff;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
 }
 
-.speed-line {
-  width: 100%;
+/* ---------- speed / battery / target ---------- */
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.stat-card {
+  padding: 18px;
+}
+
+.stat-value {
+  margin: 10px 0 8px;
+  font-size: 40px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.stat-unit {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stat-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+
+/* progress bar: gray track + colored fill */
+.bar {
   height: 4px;
-  background-color: #28d65c;
-  margin-top: 7px;
-  border-radius: 5px;
+  background-color: #2a2c31;
+  border-radius: 999px;
+  overflow: hidden;
 }
 
-
-.battery-box {
-  flex: none;
-  width: 500px;
-  height: 120px;
-  padding: 15px;
-  box-sizing: border-box;
-  background-color: #151515;
-  border: 1px solid #333;
-  border-radius: 7px;
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
 }
 
-.battery-box h2 {
-  font-size: 30px;
-  margin: 8px 0;
+.bar-fill.good {
+  background-color: var(--good);
 }
 
-.battery-status {
-  color: orange;
-  font-size: 11px;
-  margin: 0;
+.bar-fill.warn {
+  background-color: var(--warn);
 }
 
-.battery-line {
-  width: 25%;
-  height: 4px;
-  background-color: orange;
-  margin-top: 7px;
-  border-radius: 5px;
-}
-.target-box {
-  height: 90px;
-  flex: 0 0 60%;
-  width: 60%;
-  background-color: #151515;
-  border: 1px solid #333;
-  border-radius: 7px;
-  padding: 15px;
-}
 .target-status {
-  color: #28d65c;
-  font-size: 30px;
+  margin: 10px 0 0;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ---------- vehicle evidence ---------- */
+.badge {
+  padding: 3px 8px;
+  background-color: var(--warn);
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* gray badge while the target is lost */
+.badge.badge-muted {
+  background-color: #3a3d44;
+  color: #c6c9d2;
+}
+
+.evidence-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+/* placeholder frames until real camera images are wired up */
+.evidence-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 7;
+  background: linear-gradient(160deg, #2b4a52, #1a2f35);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+/* real camera frames, once they have a url */
+img.evidence-image {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.detail-label {
   margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
 }
 
-
-.accuracy,
-.accuracy-value {
-  color: #28d65c !important;
+/* ---------- gps ---------- */
+.gps-street {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
 }
-.right-column {
+
+.gps-city {
+  margin: 0 0 14px;
+  color: #c6c9d2;
+  font-size: 14px;
+}
+
+.gps-value {
+  margin: 2px 0 12px;
+  font-size: 14px;
+}
+
+.gps-value:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- flight log ---------- */
+/* fills whatever space is left, so the right column ends exactly level
+   with the left column (extra rows are cut off instead of making it taller) */
+.flight-log {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.log-list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+
+.log-row {
+  display: flex;
   gap: 16px;
-  width: 623px;
+  min-height: 35px;
+  padding: 0 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--row-border);
+  font-size: 13px;
+}
+
+.log-row:nth-child(odd) {
+  background-color: #16171b;
+}
+
+.log-time {
+  color: var(--muted);
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* ---------- smaller screens: stack the columns ---------- */
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }

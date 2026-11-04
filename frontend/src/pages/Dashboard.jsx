@@ -1,79 +1,75 @@
-// dashboard page
+// dashboard page (Flight Status)
+//
+// Shows one mission's live data. The mission number comes from the URL:
+//   /dashboard/0001   (plain /dashboard shows the latest mission started)
+// useMissionStatus refreshes the data every 2 seconds; every card just
+// displays the props it's given.
+import { useParams } from 'react-router-dom'
 import '../styles/dashboard.css'
+import { useMissionStatus } from '../hooks/useMissionStatus.js'
+import { MOCK_MAP_CENTER } from '../services/missionStatus.js'
+import { getLastMissionId } from '../services/missionNumbers.js'
+import { MapPanel } from '../components/dashboard/MapPanel.jsx'
+import { BatteryCard, SpeedCard, TargetCard } from '../components/dashboard/StatCards.jsx'
+import { EvidenceCard, FlightLog, GpsCard } from '../components/dashboard/InfoCards.jsx'
 
-
-export default function dashboard() {
+export default function Dashboard() {
+  // no number in the URL: use the last mission started on this computer (or 0001)
+  const { missionId = getLastMissionId() ?? '0001' } = useParams()
+  const { status, error } = useMissionStatus(missionId)
 
   return (
-    <div className ="dashboard-page">
-      <h1>Flight Status</h1>
-      <main>
+    <div className="dashboard-page">
+      <header className="dashboard-header">
+        <h1 className="flight-status-title">Flight Status</h1>
+        <span className="mission-label">Mission: {missionId}</span>
+      </header>
 
-        <div className="top-boxes">
-    <div className="map-box">
-      <div className="drone-marker"></div>
+      {error && (
+        <p className="dashboard-alert" role="alert">
+          Lost connection to the drone: {error}
+        </p>
+      )}
 
-      <p className="drone-text">
-        Drone
-        <br />
-        Deployed
-      </p>
+      {/* nothing has arrived yet */}
+      {!status ? (
+        <p className="dashboard-message">Waiting for telemetry…</p>
+      ) : (
+        <main className="dashboard-grid">
+          {/* ---------- left column ---------- */}
+          <section className="left-column">
+            <MapPanel
+              latitude={status.telemetry.latitude}
+              longitude={status.telemetry.longitude}
+              center={MOCK_MAP_CENTER}
+              label="Drone Deployed"
+            />
+
+            <div className="stat-row">
+              <SpeedCard speedMps={status.telemetry.speed_mps} />
+              <BatteryCard percent={status.telemetry.battery_pct} />
+            </div>
+
+            <TargetCard inFrame={status.target_in_frame} />
+          </section>
+
+          {/* ---------- right column ---------- */}
+          <section className="right-column">
+            <EvidenceCard
+              images={status.images}
+              lastSeen={status.last_seen}
+              trackingStatus={status.tracking_status}
+              targetInFrame={status.target_in_frame}
+            />
+            <GpsCard
+              latitude={status.telemetry.latitude}
+              longitude={status.telemetry.longitude}
+              location={status.location}
+            />
+            <FlightLog entries={status.flight_log} />
+          </section>
+        </main>
+      )}
     </div>
-
-    <div className="right-column">
-      <div className="vehicle-box">
-        <p className="box-title">VEHICLE EVIDENCE</p>
-        <h3>Last Seen 02:02</h3>
-        <h3></h3>
-      </div>
-
-      <div className="gps-box">
-        <p className="box-title">CURRENT GPS LOCATION</p>
-
-        <h3>W San Carlos St</h3>
-        <p>San Jose, California</p>
-
-        <p>COORDINATES</p>
-        <p>1° N · 2° W</p>
-
-        <p className="accuracy">ACCURACY</p>
-        <p className="accuracy-value">±2.4 m</p>
-      </div>
-    </div>
-  </div>
-
-    <div className="bottom1-boxes">
-         <div className="speed-box">
-            <p className="box-title">SPEED</p>
-
-          <h2>
-            2 <span>km/h</span>
-          </h2>
-
-          <p className="speed-status">Within normal range</p>
-
-          <div className="speed-line"></div>
-        </div>
-
-        <div className="battery-box">
-          <p className="box-title">BATTERY</p>
-
-          <h2>20%</h2>
-
-          <p className="battery-status">Low Battery</p>
-
-          <div className="battery-line"></div>
-        </div>
-        <div className="target-box">
-          <p className="box-title">TARGET IN FRAME</p>
-          <h2 className ="target-status">Yes</h2>
-        </div>
-          
-        </div>
-
-    </main>
-  </div>
-
-      
   )
 }
