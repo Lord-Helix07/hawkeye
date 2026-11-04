@@ -6,12 +6,15 @@
 
 
 from pathlib import Path
+from fastapi import FastAPI
+
+app = FastAPI()
 
 import cv2
 
 # import functions we need
-from backend.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
-from backend.object_detection import detect_vehicles
+from bounding_boxes import create_bounding_boxes, draw_bounding_boxes
+from object_detection import detect_vehicles
 
 #input/output video paths
 VIDEOS_DIRECTORY = Path(__file__).parent / "videos"
