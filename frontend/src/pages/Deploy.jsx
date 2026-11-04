@@ -4,14 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import '../styles/deploy.css'
 import { createMission, fetchNextMissionId } from '../services/missionNumbers.js'
 
-const emptyForm = { make: '', model: '', color: '', direction: '', plate: '' }
+const emptyForm = { make: '', model: '', color: '', plate: '' }
 
 const fields = [
   { name: 'make', label: 'Make' },
   { name: 'model', label: 'Model' },
   { name: 'color', label: 'Color' },
-  { name: 'direction', label: 'Direction' },
-  { name: 'plate', label: 'License plate' },
+  { name: 'plate', label: 'License Plate' },
 ]
 
 export default function Deploy() {
@@ -61,23 +60,19 @@ export default function Deploy() {
     <>
       <header className="deploy-header">
         <span className="deploy-logo">
-          <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 4 L20 20 M20 4 L4 20" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            <circle cx="12" cy="12" r="3" fill="currentColor" />
-          </svg>
+          {/* empty space saved for the real logo; put an <img> here later */}
+          <span className="deploy-logo-placeholder" aria-hidden="true" />
           Hawkeye
         </span>
-        <nav className="deploy-nav">
-          <button onClick={() => navigate('/dashboard')}>Live feed</button>
-          <button>History</button>
-          <button>Settings</button>
-        </nav>
       </header>
 
       <main className="deploy-main">
+        {/* 3 columns: empty | title (centered) | mission number (right edge) */}
         <div className="deploy-title">
-          <h1>Target Vehicle</h1>
-          <p>Provide details below to start mission</p>
+          <div className="deploy-title-text">
+            <h1>Target Vehicle</h1>
+            <p>Provide details below to start mission</p>
+          </div>
           <span className="mission-id">
             Mission: <strong>{nextMissionId ?? '----'}</strong>
           </span>

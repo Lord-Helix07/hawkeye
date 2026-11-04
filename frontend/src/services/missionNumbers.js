@@ -33,11 +33,10 @@ export async function createMission(form) {
       model: form.model.trim(),
       color: form.color.trim(),
       license_plate: form.plate.trim(), // the form calls it "plate", the backend "license_plate"
-      direction: form.direction.trim() || null,
     }),
   })
   if (response.status === 422) {
-    throw new Error('Fill in make, model, color and license plate.')
+    throw new Error('Fill in all required fields.')
   }
   if (!response.ok) {
     throw new Error(`Could not create the mission (${response.status})`)
