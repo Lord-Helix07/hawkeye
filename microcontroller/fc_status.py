@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pymavlink import mavutil
 
 
-MOCK_MODE = True
+MOCK_MODE = False
 FC_PORT = "/dev/ttyACM0"
 BAUD_RATE = 115200
 HEARTBEAT_TIMEOUT = 5
