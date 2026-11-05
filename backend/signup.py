@@ -50,7 +50,7 @@ def signup(request: SignUpRequest):
     except UsersTableSchemaError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except (BotoCoreError, ClientError) as error:
-        raise HTTPException(status_code=503, detail="Could not save the user") from error
+        raise HTTPException(status_code=503, detail=f"Could not save the user: {error}") from error
     # send back user without password hash
     return { "badge_num": request.badge_num }
 

@@ -1,18 +1,33 @@
 //register page
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { signUp } from '../services/auth.js'
 import '../styles/register.css'
 
 export default function Register() {
   const navigate = useNavigate()
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   // pressing Enter in either box submits the form
-  function handleRegister(e) {
+  async function handleRegister(e) {
     e.preventDefault()
-    // TODO: send badge + password to the backend to create the account
-    navigate('/login')
+    if (!badge.trim() || !password) {
+      setError('Enter a badge number and password.')
+      return
+    }
+    setError('')
+    setSubmitting(true)
+    try {
+      await signUp(badge, password) // saves the account in DynamoDB
+      navigate('/login')
+    } catch (err) {
+      setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -34,8 +49,14 @@ export default function Register() {
           onChange={(e) => setPassword(e.target.value)}
         />
         {/* hidden button so Enter submits the form */}
-        <button type="submit" hidden />
+        <button type="submit" hidden disabled={submitting} />
       </form>
+
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <p className="auth-switch">
         Already have an account?{' '}

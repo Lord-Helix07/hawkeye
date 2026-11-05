@@ -8,3 +8,10 @@
 .register-page .auth-switch button {
   color: #5EF1F2;
 }
+
+.auth-error {
+  margin: 16px 0 0;
+  color: #ff8a8a;
+  font-size: 17px;
+  text-align: center;
+}
