@@ -10,6 +10,36 @@
   /* 20px more padding at the bottom than the top shifts the content 10px up */
   padding: 24px 24px 44px;
 }
+.auth-brand {
+  position: absolute;
+  top: 24px;
+  left: 30px;
+  color: white;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+/* Only the icon is centered */
+.auth-icon-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.hawkeye-icon {
+  width: 82px;
+  height: 82px;
+  display: block;
+  fill: white;
+  transform: rotate(45deg);
+  filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.5));
+  transition: transform 0.25s ease;
+}
+
+.hawkeye-icon:hover {
+  transform: rotate(45deg) scale(1.08);
+}
 
 .auth-title {
   margin: 0 0 48px;

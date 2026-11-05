@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 const activity = [
   { time: '21:04:12', text: 'Officer input data: [silver sedan], [JLS24K], [northbound]' },
-  { time: '21:06:24', text: 'Hawkeye-02 deployed' },
+  { time: '21:06:24', text: 'Hawkeye 1 deployed' },
   { time: '21:07:48', text: 'Hawkeye reached optimal height' },
 ]
 
@@ -66,14 +66,14 @@ export default function Landing() {
               {item}
             </p>
           ))}
-          <p className="console-section">Active drones</p>
+          <p className="console-section">Active Drones</p>
           <p className="console-item">
-            <span className="status-dot" /> Hawkeye-02
+            <span className="status-dot" /> Drone 1
           </p>
         </aside>
 
         <div className="console-main">
-          <p className="console-crumb">HWK-07-2410 · Live pursuit</p>
+          <p className="console-crumb">HWK-67-6767 · Live pursuit</p>
 
           <h2 className="console-title">Target lock: silver sedan, northbound</h2>
 
