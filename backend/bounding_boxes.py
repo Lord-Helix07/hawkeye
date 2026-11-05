@@ -10,10 +10,11 @@ def create_bounding_boxes(detections):
 
     vehicles = []
 
-    #Note: ids are only starting at 1 this MUST be changed later when we start using persistent IDs via the bytetrack jawny
+    # ByteTrack passes a persistent track_id. Without one, number the boxes from 1.
     for index, detection in enumerate(detections, start=1):
+        box_id = detection.get("track_id", index)
         vehicle = {
-            "box_id": index,
+            "box_id": box_id,
             "class_id": detection["class_id"],
             "class_name": detection["class_name"],
             "confidence": detection["confidence"],
