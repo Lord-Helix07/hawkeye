@@ -32,6 +32,44 @@ export default function Register() {
 
   return (
     <main className="auth-page register-page">
+      
+      <div className="auth-brand">
+        <svg
+          className="auth-brand-icon"
+          viewBox="0 0 100 100"
+          aria-hidden="true"
+        >
+        <path
+           d="
+              M50 6
+              C54 25 62 38 94 50
+              C75 54 63 62 50 94
+              C46 75 38 62 6 50
+              C25 46 38 38 50 6
+              Z
+            "
+          />
+        </svg>
+        <span>Hawkeye</span>
+      </div>
+      <div className="auth-icon-center">
+      <svg
+        className="hawkeye-icon"
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+       >
+      <path
+       d="
+       M50 6
+       C54 25 62 38 94 50
+       C75 54 63 62 50 94
+       C46 75 38 62 6 50
+       C25 46 38 38 50 6
+       Z
+      "
+      />
+     </svg>
+     </div>
       <h1 className="auth-title">Register for Hawkeye</h1>
 
       <form className="auth-form" onSubmit={handleRegister}>

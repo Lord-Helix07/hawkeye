@@ -18,8 +18,25 @@ export default function Login() {
   return (
     <main className="auth-page">
       <div className="auth-brand">
-    Hawkeye
-  </div>
+        <svg
+          className="auth-brand-icon"
+          viewBox="0 0 100 100"
+          aria-hidden="true"
+        >
+        <path
+           d="
+              M50 6
+              C54 25 62 38 94 50
+              C75 54 63 62 50 94
+              C46 75 38 62 6 50
+              C25 46 38 38 50 6
+              Z
+            "
+          />
+        </svg>
+
+        <span>Hawkeye</span>
+      </div>
 
   {/* Icon is centered above the login title */}
   <div className="auth-icon-center">

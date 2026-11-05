@@ -17,9 +17,26 @@
 }
 
 .landing-logo {
-  font-size: 30px;
-  font-weight: 600;
-  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: white;
+  font-size: 28px;
+  font-weight: 500;
+}
+
+.landing-logo-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  fill: white;
+  transform: rotate(45deg);
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.5));
+  transition: transform 0.25s ease;
+}
+
+.landing-logo-icon:hover {
+  transform: rotate(45deg) scale(1.08);
 }
 
 .landing-auth {

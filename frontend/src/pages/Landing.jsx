@@ -35,7 +35,24 @@ export default function Landing() {
   return (
     <div className="landing">
       <header className="landing-header">
-        <span className="landing-logo">Hawkeye</span>
+        <span className="landing-logo">
+          <svg
+            className="landing-logo-icon"
+            viewBox="0 0 100 100"
+            aria-hidden="true"
+          >
+        <path
+         d="
+            M50 6
+            C54 25 62 38 94 50
+           C75 54 63 62 50 94
+           C46 75 38 62 6 50
+           C25 46 38 38 50 6
+           Z
+         "
+        />
+      </svg>
+          Hawkeye</span>
         <div className="landing-auth">
           <button className="login-btn" onClick={() => navigate('/login')}>Log in</button>
           <button className="signup-btn" onClick={() => navigate('/register')}>Sign up</button>

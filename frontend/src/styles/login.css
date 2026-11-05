@@ -14,11 +14,24 @@
   position: absolute;
   top: 24px;
   left: 30px;
-  color: white;
-  font-size: 24px;
-  font-weight: 500;
-}
 
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+
+  color: white;
+  font-size: 28px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.auth-brand-icon {
+  width: 32px;
+  height: 32px;
+  display: block;
+  fill: white;
+  transform: rotate(45deg);
+}
 /* Only the icon is centered */
 .auth-icon-center {
   display: flex;

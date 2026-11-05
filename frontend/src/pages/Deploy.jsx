@@ -60,7 +60,22 @@ export default function Deploy() {
     <>
       <header className="deploy-header">
         <span className="deploy-logo">
-          {/* empty space saved for the real logo; put an <img> here later */}
+        <svg
+        className="hawkeye-icon deploy-logo-icon"
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+        >
+        <path
+         d="
+           M50 6
+           C54 25 62 38 94 50
+           C75 54 63 62 50 94
+           C46 75 38 62 6 50
+           C25 46 38 38 50 6
+           Z
+          "
+          />
+          </svg> 
           <span className="deploy-logo-placeholder" aria-hidden="true" />
           Hawkeye
         </span>

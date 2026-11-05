@@ -17,10 +17,18 @@
 }
 
 /* same size as the old X icon, so "Hawkeye" stays in the same spot */
-.deploy-logo-placeholder {
-  width: 26px;
-  height: 26px;
+.deploy-logo-icon {
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
+  fill: white;
+  transform: rotate(45deg);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
+  transition: transform 0.25s ease;
+}
+
+.deploy-logo-icon:hover {
+  transform: rotate(45deg) scale(1.08);
 }
 
 /* "Live feed" button (testing): opens the camera test page.
