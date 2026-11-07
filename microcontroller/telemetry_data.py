@@ -1,19 +1,15 @@
-"""
-Shared MAVLink telemetry service for HawkEye.
+#File Purpose:
+#1. Opening one MAVLink connection to the Kakute.
+#2. Reading messages from ArduPilot.
+#3. Caching the newest message of each type.
+#4. Rejecting old telemetry data.
+#5. Decoding flight-controller status.
+#6. Decoding position, speed, altitude, GPS, and battery data.
+#7. Publishing combined telemetry to the backend.
 
-This module is responsible for:
+#Only one process should read from the Kakute serial port.
+#Launch, landing, and backend publishing should use this shared cache.
 
-1. Opening one MAVLink connection to the Kakute.
-2. Reading messages from ArduPilot.
-3. Caching the newest message of each type.
-4. Rejecting old telemetry data.
-5. Decoding flight-controller status.
-6. Decoding position, speed, altitude, GPS, and battery data.
-7. Publishing combined telemetry to the backend.
-
-Only one process should read from the Kakute serial port.
-Launch, landing, and backend publishing should use this shared cache.
-"""
 
 import argparse
 import json
