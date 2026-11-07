@@ -1,244 +1,251 @@
+
 from pymavlink import mavutil
 import argparse
 import time
+import json
 
 
 # default connection for the Pi and Kakute
 DEFAULT_CONNECTION = "/dev/ttyACM0"
 DEFAULT_BAUD_RATE = 115200
 
-# SITL can use tcp:127.0.0.1:5760
-
 # time limits
 INITIAL_HEARTBEAT_TIMEOUT = 10
 HEARTBEAT_MAX_AGE = 3.0
+TELEMETRY_MAX_AGE = 5.0
 LAND_MODE_TIMEOUT = 10
 LANDING_TIMEOUT = 90
-TELEMETRY_MAX_AGE = 5.0
 
-# used to tell when we're getting close to the ground
-NEAR_GROUND_ALTITUDE = 0.5
+# flight commands are disabled unless specifically enabled
 
 
 def make_status(state, reason=None, **extra):
-    # makes a status that backend can eventually use
     result = {
         "state": state,
         "reason": reason,
     }
-
     result.update(extra)
-
     return result
 
 
 def report_status(status):
-    # prints for now, backend can connect to this later
-    print(status)
+    # prints for now, backend can connect this later
+    print(json.dumps(status, default=str))
 
 
 def connect(connection_address, baud_rate):
-    # connect to the Kakute and wait for ArduPilot
-    print(
-        f"Connecting to flight controller at "
-        f"{connection_address}..."
-    )
-
+    # connect to ArduPilot and wait for the first heartbeat
     connection = mavutil.mavlink_connection(
         connection_address,
         baud=baud_rate
     )
 
-    heartbeat = connection.wait_heartbeat(
-        timeout=INITIAL_HEARTBEAT_TIMEOUT
-    )
-
-    if heartbeat is None:
-        raise RuntimeError(
-            "No heartbeat received from flight controller."
+    try:
+        heartbeat = connection.wait_heartbeat(
+            timeout=INITIAL_HEARTBEAT_TIMEOUT
         )
 
-    print("Flight controller connected.")
+        if heartbeat is None:
+            raise RuntimeError(
+                "No initial heartbeat received."
+            )
 
-    return connection
+        return connection
 
-
-def get_heartbeat(connection, timeout=1):
-    # get the newest heartbeat from ArduPilot
-    return connection.recv_match(
-        type="HEARTBEAT",
-        blocking=True,
-        timeout=timeout
-    )
+    except Exception:
+        connection.close()
+        raise
 
 
 def is_armed(heartbeat):
-    # check if the heartbeat says the drone is armed
     return bool(
         heartbeat.base_mode
         & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
     )
 
 
-def check_communication(connection):
-    # make sure the Pi can still talk to the Kakute
-    heartbeat = get_heartbeat(
-        connection,
-        timeout=HEARTBEAT_MAX_AGE
-    )
+class LandingTelemetry:
+    # stores the newest messages and when they arrived
 
-    if heartbeat is None:
-        raise RuntimeError(
-            "Flight controller heartbeat is missing."
+    def __init__(self, connection):
+        self.connection = connection
+        self.messages = {}
+
+    def update(self, timeout=0.2):
+        message = self.connection.recv_match(
+            blocking=True,
+            timeout=timeout
         )
 
-    return heartbeat
+        if message is None:
+            return None
+
+        message_type = message.get_type()
+
+        if message_type == "BAD_DATA":
+            return None
+
+        self.messages[message_type] = (
+            message,
+            time.monotonic()
+        )
+
+        return message
+
+    def fresh(self, message_type, max_age=TELEMETRY_MAX_AGE):
+        stored = self.messages.get(message_type)
+
+        if stored is None:
+            return None
+
+        message, received_at = stored
+
+        if time.monotonic() - received_at > max_age:
+            return None
+
+        return message
+
+    def heartbeat(self):
+        return self.fresh(
+            "HEARTBEAT",
+            HEARTBEAT_MAX_AGE
+        )
+
+    def altitude(self):
+        position = self.fresh("GLOBAL_POSITION_INT")
+
+        if position is None:
+            return None
+
+        # relative altitude is in millimeters
+        return position.relative_alt / 1000.0
+
+    def landed_state(self):
+        message = self.fresh("EXTENDED_SYS_STATE")
+
+        if message is None:
+            return None
+
+        return message.landed_state
 
 
-def request_land_mode(connection):
-    # ask ArduPilot to start landing
-    print("Requesting LAND mode...")
+def get_aircraft_status(cache):
+    heartbeat = cache.heartbeat()
 
-    mode_id = (
-        connection
-        .mode_mapping()
-        .get("LAND")
-    )
+    if heartbeat is None:
+        return {
+            "armed": None,
+            "mode": None,
+            "altitude_m": cache.altitude(),
+            "landed_state": cache.landed_state(),
+        }
+
+    return {
+        "armed": is_armed(heartbeat),
+        "mode": mavutil.mode_string_v10(heartbeat),
+        "altitude_m": cache.altitude(),
+        "landed_state": cache.landed_state(),
+    }
+
+
+def check_telemetry(cache):
+    # check freshness even if other messages keep arriving
+    if cache.heartbeat() is None:
+        return "Heartbeat missing or stale"
+
+    if cache.fresh("GLOBAL_POSITION_INT") is None:
+        return "Altitude telemetry missing or stale"
+
+    if cache.fresh("EXTENDED_SYS_STATE") is None:
+        return "Landed-state telemetry missing or stale"
+
+    return None
+
+
+def request_land_mode(connection, cache):
+    # ask ArduPilot to land at the current location
+    mode_id = connection.mode_mapping().get("LAND")
 
     if mode_id is None:
-        raise RuntimeError(
-            "LAND mode is not available."
+        return make_status(
+            "LANDING_NOT_AVAILABLE",
+            "LAND mode is unavailable."
         )
 
     connection.set_mode(mode_id)
 
-    deadline = (
-        time.monotonic()
-        + LAND_MODE_TIMEOUT
-    )
+    deadline = time.monotonic() + LAND_MODE_TIMEOUT
 
-    # make sure ArduPilot actually switches to LAND
     while time.monotonic() < deadline:
+        cache.update()
 
-        heartbeat = get_heartbeat(
-            connection,
-            timeout=1
-        )
+        heartbeat = cache.heartbeat()
 
         if heartbeat is None:
             continue
 
-        current_mode = (
-            mavutil.mode_string_v10(
-                heartbeat
-            )
+        current_mode = mavutil.mode_string_v10(
+            heartbeat
         )
 
         if current_mode == "LAND":
-            print("LAND mode confirmed.")
-            return
+            return make_status(
+                "LAND_CONFIRMED",
+                "ArduPilot reports LAND mode."
+            )
 
-    raise RuntimeError(
-        "Timed out waiting for LAND mode."
+    # no confirmation does not mean the command failed
+    return make_status(
+        "LANDING_OUTCOME_UNKNOWN",
+        "LAND was requested, but mode change was not confirmed.",
+        request_sent=True
     )
 
 
-def monitor_landing(connection):
-    # watch altitude and armed state while the drone comes down
-    print("Landing started. Monitoring descent...")
+def monitor_landing(connection, cache):
+    # watch the aircraft until landing is verified or time runs out
+    deadline = time.monotonic() + LANDING_TIMEOUT
 
-    deadline = (
-        time.monotonic()
-        + LANDING_TIMEOUT
-    )
-
-    last_altitude_time = time.monotonic()
-    last_heartbeat_time = time.monotonic()
-
-    current_altitude = None
+    on_ground = mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND
 
     while time.monotonic() < deadline:
+        cache.update()
 
-        message = connection.recv_match(
-            type=[
-                "GLOBAL_POSITION_INT",
-                "HEARTBEAT"
-            ],
-            blocking=True,
-            timeout=1
-        )
+        # check freshness on every loop
+        telemetry_error = check_telemetry(cache)
 
-        now = time.monotonic()
-
-        if message is None:
-
-            # stop trusting the connection if heartbeat disappears
-            if (
-                now - last_heartbeat_time
-                > HEARTBEAT_MAX_AGE
-            ):
-                raise RuntimeError(
-                    "Lost flight controller communication "
-                    "during landing."
-                )
-
-            continue
-
-        message_type = message.get_type()
-
-        if message_type == "HEARTBEAT":
-
-            last_heartbeat_time = now
-
-            # ArduPilot should disarm after the drone lands
-            if not is_armed(message):
-
-                print("Drone is disarmed.")
-
-                return make_status(
-                    "LANDED",
-                    reason=(
-                        "Landing completed and "
-                        "the drone is disarmed."
-                    ),
-                    altitude_m=current_altitude
-                )
-
-        elif message_type == "GLOBAL_POSITION_INT":
-
-            last_altitude_time = now
-
-            # relative_alt comes in millimeters
-            current_altitude = (
-                message.relative_alt
-                / 1000.0
+        if telemetry_error:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                telemetry_error,
+                aircraft=get_aircraft_status(cache)
             )
 
-            print(
-                f"Current altitude: "
-                f"{current_altitude:.2f} meters"
-            )
+        aircraft = get_aircraft_status(cache)
 
-            if (
-                current_altitude
-                <= NEAR_GROUND_ALTITUDE
-            ):
-                print(
-                    "Drone is near the ground. "
-                    "Waiting for disarm..."
-                )
-
-        # don't keep landing with old altitude data
+        # both landed state and disarming are required
         if (
-            now - last_altitude_time
-            > TELEMETRY_MAX_AGE
+            aircraft["armed"] is False
+            and aircraft["landed_state"] == on_ground
         ):
-            raise RuntimeError(
-                "Altitude telemetry was lost during landing."
+            return make_status(
+                "LANDED",
+                "On-ground state and disarming confirmed.",
+                aircraft=aircraft
             )
 
-    raise RuntimeError(
-        "Landing did not finish before timeout."
+        # do not override manual control or failsafes
+        if aircraft["mode"] != "LAND":
+            return make_status(
+                "LANDING_CONTROL_CHANGED",
+                "ArduPilot left LAND mode. No new command sent.",
+                aircraft=aircraft
+            )
+
+    return make_status(
+        "LANDING_OUTCOME_UNKNOWN",
+        "Landing monitoring timed out. Aircraft may still be landing.",
+        aircraft=get_aircraft_status(cache)
     )
 
 
@@ -246,181 +253,142 @@ def run_landing(
     connection_address,
     baud_rate,
     execute_landing=False,
+    simulation_confirmed=False,
     allow_hardware_landing=False
 ):
-    # backend will call this after the officer clicks Land Drone
     connection = None
-    landing_started = False
+    cache = None
+    request_sent = False
 
     try:
-
-        # land request received from frontend/backend
         report_status(
             make_status(
                 "LANDING_REQUEST_RECEIVED",
-                reason=(
-                    "Land Drone request received."
-                )
+                "Land Drone request received."
             )
         )
 
-        # connect to the Kakute
         connection = connect(
             connection_address,
             baud_rate
         )
 
-        # make sure communication is working
-        heartbeat = check_communication(
-            connection
-        )
+        cache = LandingTelemetry(connection)
 
-        # if it's already disarmed there is nothing to land
-        if not is_armed(heartbeat):
+        # collect initial telemetry
+        deadline = time.monotonic() + TELEMETRY_MAX_AGE
 
-            status = make_status(
-                "LANDING_NOT_REQUIRED",
-                reason=(
-                    "Drone is already disarmed."
-                )
+        while time.monotonic() < deadline:
+            cache.update()
+
+            if (
+                cache.heartbeat() is not None
+                and cache.fresh("GLOBAL_POSITION_INT") is not None
+                and cache.fresh("EXTENDED_SYS_STATE") is not None
+            ):
+                break
+
+        aircraft = get_aircraft_status(cache)
+
+        if aircraft["armed"] is None:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                "Current armed state is unknown."
             )
 
-            report_status(status)
+        # don't assume disarmed automatically means landed
+        if aircraft["armed"] is False:
+            if (
+                aircraft["landed_state"]
+                == mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND
+            ):
+                return make_status(
+                    "LANDING_NOT_REQUIRED",
+                    "Aircraft is already on ground and disarmed."
+                )
 
-            return status
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                "Aircraft is disarmed, but ground state is not confirmed."
+            )
 
-        # landing is disabled unless specifically enabled
         if not execute_landing:
-
-            status = make_status(
+            return make_status(
                 "LANDING_DISABLED",
-                reason=(
-                    "Land Drone request received, "
-                    "but landing execution is disabled."
-                )
+                "Landing execution is disabled."
             )
 
-            report_status(status)
-
-            return status
-
-        # check if we're using SITL
-        is_sitl = (
-            connection_address.startswith(
-                (
-                    "tcp:",
-                    "udp:",
-                    "udpin:",
-                    "udpout:"
-                )
+        # transport type does not prove simulation
+        if simulation_confirmed == allow_hardware_landing:
+            return make_status(
+                "AUTHORIZATION_REQUIRED",
+                "Select exactly one verified execution environment."
             )
+
+        telemetry_error = check_telemetry(cache)
+
+        if telemetry_error:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                telemetry_error
+            )
+
+        # clicking Land Drone is already the operator request
+        request_sent = True
+
+        result = request_land_mode(
+            connection,
+            cache
         )
 
-        # real hardware needs another explicit flag
-        if (
-            not is_sitl
-            and not allow_hardware_landing
-        ):
+        report_status(result)
 
-            status = make_status(
-                "HARDWARE_LANDING_BLOCKED",
-                reason=(
-                    "Real hardware landing requires "
-                    "explicit approval."
-                )
-            )
-
-            report_status(status)
-
-            return status
-
-        # clicking Land Drone is already the operator command
-        # so there is no second confirmation step here
-
-        # tell ArduPilot to land where the drone currently is
-        request_land_mode(
-            connection
-        )
-
-        # LAND mode is confirmed so the drone should be descending
-        landing_started = True
+        if result["state"] != "LAND_CONFIRMED":
+            return result
 
         report_status(
             make_status(
                 "LANDING",
-                reason=(
-                    "LAND mode confirmed. "
-                    "Drone is descending."
-                )
+                "LAND mode confirmed. Monitoring landing."
             )
         )
 
-        # monitor until the drone lands and disarms
-        status = monitor_landing(
-            connection
+        return monitor_landing(
+            connection,
+            cache
         )
-
-        report_status(status)
-
-        return status
 
     except Exception as error:
-
-        # landing command never successfully started
-        if not landing_started:
-
-            status = make_status(
-                "LANDING_FAILED_TO_START",
-                reason=str(error)
+        if request_sent:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                str(error),
+                request_sent=True
             )
 
-        # LAND already started so the drone may be descending
-        else:
-
-            status = make_status(
-                "LANDING_FAILURE",
-                reason=str(error)
-            )
-
-        report_status(status)
-
-        return status
+        return make_status(
+            "LANDING_FAILED_TO_START",
+            str(error),
+            request_sent=False
+        )
 
     finally:
-
-        # always close the MAVLink connection when we're done
+        # close the connection whether landing succeeds or fails
         if connection is not None:
-
             try:
-
                 connection.close()
-
-                print(
-                    "Flight controller "
-                    "connection closed."
-                )
-
             except Exception:
-
                 pass
 
 
 def parse_args():
-
     parser = argparse.ArgumentParser(
-        description=(
-            "HawkEye landing sequence"
-        )
+        description="Hawkeye landing sequence"
     )
 
     parser.add_argument(
         "--connection",
-        default=DEFAULT_CONNECTION,
-        help=(
-            "MAVLink connection. "
-            "Pi: /dev/ttyACM0 "
-            "SITL: tcp:127.0.0.1:5760"
-        )
+        default=DEFAULT_CONNECTION
     )
 
     parser.add_argument(
@@ -431,43 +399,34 @@ def parse_args():
 
     parser.add_argument(
         "--execute-landing",
-        action="store_true",
-        help=(
-            "Enable landing. "
-            "Disabled by default."
-        )
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--simulation-confirmed",
+        action="store_true"
     )
 
     parser.add_argument(
         "--allow-hardware-landing",
-        action="store_true",
-        help=(
-            "Extra opt-in required for "
-            "real hardware landing."
-        )
+        action="store_true"
     )
 
     return parser.parse_args()
 
 
 def main():
-
     args = parse_args()
 
-    run_landing(
-        connection_address=(
-            args.connection
-        ),
-        baud_rate=(
-            args.baud
-        ),
-        execute_landing=(
-            args.execute_landing
-        ),
-        allow_hardware_landing=(
-            args.allow_hardware_landing
-        )
+    result = run_landing(
+        connection_address=args.connection,
+        baud_rate=args.baud,
+        execute_landing=args.execute_landing,
+        simulation_confirmed=args.simulation_confirmed,
+        allow_hardware_landing=args.allow_hardware_landing
     )
+
+    report_status(result)
 
 
 if __name__ == "__main__":
