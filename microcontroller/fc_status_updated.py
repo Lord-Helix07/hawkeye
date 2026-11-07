@@ -1,280 +1,244 @@
+"""
+Flight-controller status
+
+- Reads status from TelemetryCache
+- Builds the backend payload
+- Publishes status
+- Provides mock and standalone testing modes
+
+"""
+
 import argparse
 import json
 import os
 import time
-import urllib.error
-import urllib.request
-from datetime import datetime, timezone
 
-import serial
-from pymavlink import mavutil
+try:
+    # Used when imported as part of the microcontroller package.
+    from .telemetry import (
+        connect_telemetry,
+        publish_payload,
+    )
+except ImportError:
+    # Used when running this file directly.
+    from telemetry import (
+        connect_telemetry,
+        publish_payload,
+    )
 
 
 DEFAULT_CONNECTION = "/dev/ttyACM0"
 DEFAULT_BAUD_RATE = 115200
+
 DEFAULT_BACKEND_URL = (
     "http://127.0.0.1:8000/flight-controller/status"
 )
 
-HEARTBEAT_TIMEOUT = 5
-RECONNECT_DELAY = 2
+DEFAULT_DRONE_ID = "drone-01"
+DEFAULT_PUBLISH_INTERVAL = 1.0
 
-#gets timestamp
+
 def timestamp():
-    """Return the current UTC time."""
+    """Return a UTC timestamp."""
+    from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).isoformat()
 
 
-def base_status():
-    """Create a consistent status format."""
+def mock_payload(drone_id):
+    """
+    Create fake data with the same structure used by the
+    real telemetry system.
+    """
+    current_time = timestamp()
+
     return {
-        "drone_id": os.getenv("DRONE_ID", "drone-01"),
-        "connected": False,
-        "status": "unknown",
-        "flight_mode": "UNKNOWN",
-        "custom_mode": None,
-        "armed": None,
-        "system_status": "UNKNOWN",
-        "last_heartbeat": None,
-        "stale": True,
-        "error": None,
-    }
-
-#Sets default values to test without physical access to the Pi
-def mock_status():
-    """Create fake FC status for local testing."""
-    status = base_status()
-
-    status.update({
-        "connected": True,
-        "status": "connected",
-        "flight_mode": "STABILIZE",
-        "custom_mode": 0,
-        "armed": False,
-        "system_status": "STANDBY",
-        "last_heartbeat": timestamp(),
-        "stale": False,
-    })
-
-    return status
-
-#If the program runs into an issue reading the FC, it calls this function
-def failure_status(status_name, error_message):
-    """Create a consistent failure response."""
-    status = base_status()
-    status["status"] = status_name
-    status["error"] = error_message
-    return status
-
-
-def system_status_name(status_number):
-    """Convert ArduPilot's numeric status into readable text."""
-    statuses = {
-        mavutil.mavlink.MAV_STATE_UNINIT: "UNINIT",
-        mavutil.mavlink.MAV_STATE_BOOT: "BOOT",
-        mavutil.mavlink.MAV_STATE_CALIBRATING: "CALIBRATING",
-        mavutil.mavlink.MAV_STATE_STANDBY: "STANDBY",
-        mavutil.mavlink.MAV_STATE_ACTIVE: "ACTIVE",
-        mavutil.mavlink.MAV_STATE_CRITICAL: "CRITICAL",
-        mavutil.mavlink.MAV_STATE_EMERGENCY: "EMERGENCY",
-        mavutil.mavlink.MAV_STATE_POWEROFF: "POWEROFF",
-    }
-
-    return statuses.get(status_number, "UNKNOWN")
-
-
-def heartbeat_to_status(heartbeat, last_heartbeat_time):
-    """Convert a MAVLink heartbeat into backend-ready JSON."""
-    armed_flag = mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
-
-    status = base_status()
-
-    status.update({
-        "connected": True,
-        "status": "connected",
-        "flight_mode": mavutil.mode_string_v10(heartbeat),
-        "custom_mode": int(heartbeat.custom_mode),
-        "armed": bool(heartbeat.base_mode & armed_flag),
-        "system_status": system_status_name(
-            heartbeat.system_status
-        ),
-        "last_heartbeat": last_heartbeat_time,
-        "stale": False,
-    })
-
-    return status
-
-#dyanamoDb
-def publish_status(backend_url, status):
-    """Send the current status to the FastAPI backend."""
-    payload = json.dumps(status).encode("utf-8")
-
-    request = urllib.request.Request(
-        backend_url,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
+        "drone_id": drone_id,
+        "mission_id": None,
+        "flight_controller": {
+            "drone_id": drone_id,
+            "connected": True,
+            "status": "connected",
+            "flight_mode": "STABILIZE",
+            "custom_mode": 0,
+            "armed": False,
+            "system_status": "STANDBY",
+            "last_heartbeat": current_time,
+            "stale": False,
+            "error": None,
         },
-        method="POST",
+        "telemetry": {
+            "latitude": None,
+            "longitude": None,
+            "altitude_m": None,
+            "speed_mps": None,
+            "heading_deg": None,
+            "gps_fix_type": None,
+            "satellites_visible": None,
+            "battery_pct": None,
+            "battery_voltage": None,
+            "battery_current": None,
+            "timestamp": current_time,
+        },
+        "readiness": {
+            "ready_for_launch": False,
+            "reasons": [
+                "Mock data is being used."
+            ],
+        },
+    }
+
+
+def get_fc_status(cache):
+    """
+    Read the latest flight-controller status from
+    the shared TelemetryCache.
+
+    This function does not read directly from MAVLink.
+    """
+    return cache.get_flight_controller_status()
+
+
+def build_status_payload(cache, mission_id=None):
+    """
+    Build one complete backend payload from the shared cache.
+    """
+    return cache.build_backend_payload(
+        mission_id=mission_id
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=3) as response:
-            print(
-                f"Status published to backend "
-                f"with HTTP {response.status}"
+
+def publish_fc_status(
+    cache,
+    backend_url,
+    mission_id=None,
+):
+    """
+    Publish current FC status and telemetry.
+
+    The shared cache must already be connected and updated
+    by the main controller.
+    """
+    payload = build_status_payload(
+        cache=cache,
+        mission_id=mission_id,
+    )
+
+    print(json.dumps(payload, indent=2))
+
+    return publish_payload(
+        backend_url=backend_url,
+        payload=payload,
+    )
+
+
+def run_shared_status_publisher(
+    cache,
+    backend_url,
+    mission_id=None,
+    publish_interval=DEFAULT_PUBLISH_INTERVAL,
+):
+    """
+    Publish from an existing shared cache.
+
+    Important:
+    The caller must update the cache. This function does not
+    call cache.update(), because launch and landing code may
+    also use the same cache.
+    """
+    next_publish_time = time.monotonic()
+
+    while True:
+        now = time.monotonic()
+
+        if now >= next_publish_time:
+            publish_fc_status(
+                cache=cache,
+                backend_url=backend_url,
+                mission_id=mission_id,
             )
 
-    except urllib.error.HTTPError as error:
-        print(
-            f"Backend rejected status: "
-            f"HTTP {error.code}"
-        )
+            next_publish_time = (
+                now + publish_interval
+            )
 
-    except urllib.error.URLError as error:
-        print(f"Could not reach backend: {error}")
-
-    except Exception as error:
-        print(f"Unexpected publishing error: {error}")
+        time.sleep(0.05)
 
 
-def monitor_fc(
+def run_standalone_mode(
     connection_address,
     baud_rate,
     backend_url,
+    drone_id,
+    mission_id,
+    publish_interval,
 ):
-    """Continuously monitor the flight controller."""
-    while True:
-        connection = None
+    """
+    Standalone testing mode.
 
-        try:
-            print(
-                f"Connecting to flight controller at "
-                f"{connection_address}..."
-            )
+    This mode owns the MAVLink connection and should only be
+    used when launch_sequence.py and landing_sequence.py are
+    not running at the same time.
+    """
+    cache = None
 
-            connection = mavutil.mavlink_connection(
-                connection_address,
-                baud=baud_rate,
-            )
+    try:
+        cache = connect_telemetry(
+            connection_address=connection_address,
+            baud_rate=baud_rate,
+            drone_id=drone_id,
+        )
 
-            print("Waiting for first heartbeat...")
+        next_publish_time = time.monotonic()
 
-            heartbeat = connection.wait_heartbeat(
-                timeout=10
-            )
+        while True:
+            # telemetry.py owns the actual MAVLink read.
+            cache.update(timeout=0.2)
 
-            if heartbeat is None:
-                status = failure_status(
-                    "initial_heartbeat_timeout",
-                    "No heartbeat received within 10 seconds",
+            now = time.monotonic()
+
+            if now >= next_publish_time:
+                publish_fc_status(
+                    cache=cache,
+                    backend_url=backend_url,
+                    mission_id=mission_id,
                 )
 
-                print(json.dumps(status, indent=2))
-                publish_status(backend_url, status)
-
-                time.sleep(RECONNECT_DELAY)
-                continue
-
-            print("Flight controller connected.")
-
-            last_heartbeat_received = time.monotonic()
-            last_heartbeat_time = timestamp()
-
-            while True:
-                heartbeat = connection.recv_match(
-                    type="HEARTBEAT",
-                    blocking=True,
-                    timeout=1,
+                next_publish_time = (
+                    now + publish_interval
                 )
 
-                if heartbeat is not None:
-                    last_heartbeat_received = (
-                        time.monotonic()
-                    )
-                    last_heartbeat_time = timestamp()
+    except KeyboardInterrupt:
+        print("Stopping FC status publisher.")
 
-                    status = heartbeat_to_status(
-                        heartbeat,
-                        last_heartbeat_time,
-                    )
+    except Exception as error:
+        print(f"FC status publisher failed: {error}")
 
-                    print(json.dumps(status, indent=2))
-                    publish_status(backend_url, status)
-
-                elapsed = (
-                    time.monotonic()
-                    - last_heartbeat_received
-                )
-
-                if elapsed > HEARTBEAT_TIMEOUT:
-                    status = failure_status(
-                        "heartbeat_timeout",
-                        "No heartbeat received for 5 seconds",
-                    )
-
-                    status["last_heartbeat"] = (
-                        last_heartbeat_time
-                    )
-
-                    print(json.dumps(status, indent=2))
-                    publish_status(backend_url, status)
-
-                    print("Heartbeat lost. Reconnecting...")
-                    break
-
-        except FileNotFoundError as error:
-            status = failure_status(
-                "connection_error",
-                f"Connection address not found: {error}",
-            )
-
-            print(json.dumps(status, indent=2))
-            publish_status(backend_url, status)
-
-        except (serial.SerialException, OSError) as error:
-            status = failure_status(
-                "connection_error",
-                f"Serial communication failed: {error}",
-            )
-
-            print(json.dumps(status, indent=2))
-            publish_status(backend_url, status)
-
-        except Exception as error:
-            status = failure_status(
-                "communication_error",
-                f"Unexpected MAVLink error: {error}",
-            )
-
-            print(json.dumps(status, indent=2))
-            publish_status(backend_url, status)
-
-        except KeyboardInterrupt:
-            print("Stopping flight-controller monitor.")
-            break
-
-        finally:
-            if connection is not None:
-                try:
-                    connection.close()
-                    print("Flight-controller connection closed.")
-                except Exception:
-                    pass
-
-        time.sleep(RECONNECT_DELAY)
+    finally:
+        if cache is not None:
+            cache.close()
 
 
-def run_mock_mode(backend_url):
-    """Continuously publish fake statuses for testing."""
+def run_mock_mode(
+    backend_url,
+    drone_id,
+    publish_interval,
+):
+    """
+    Continuously publish fake status for local testing.
+    """
     try:
         while True:
-            status = mock_status()
+            payload = mock_payload(drone_id)
 
-            print(json.dumps(status, indent=2))
-            publish_status(backend_url, status)
+            print(json.dumps(payload, indent=2))
 
-            time.sleep(1)
+            publish_payload(
+                backend_url=backend_url,
+                payload=payload,
+            )
+
+            time.sleep(publish_interval)
 
     except KeyboardInterrupt:
         print("Stopping mock status publisher.")
@@ -282,7 +246,9 @@ def run_mock_mode(backend_url):
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Monitor ArduPilot FC status"
+        description=(
+            "HawkEye flight-controller status publisher"
+        )
     )
 
     parser.add_argument(
@@ -292,8 +258,8 @@ def parse_arguments():
             DEFAULT_CONNECTION,
         ),
         help=(
-            "Connection address, such as "
-            "/dev/ttyACM0 or udp:127.0.0.1:14550"
+            "MAVLink address, such as /dev/ttyACM0 "
+            "or udp:127.0.0.1:14550"
         ),
     )
 
@@ -317,9 +283,40 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--drone-id",
+        default=os.getenv(
+            "DRONE_ID",
+            DEFAULT_DRONE_ID,
+        ),
+    )
+
+    parser.add_argument(
+        "--mission-id",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=DEFAULT_PUBLISH_INTERVAL,
+        help=(
+            "Seconds between backend updates"
+        ),
+    )
+
+    parser.add_argument(
         "--mock",
         action="store_true",
-        help="Use fake status instead of real MAVLink data",
+        help="Publish fake telemetry data",
+    )
+
+    parser.add_argument(
+        "--standalone",
+        action="store_true",
+        help=(
+            "Open its own MAVLink connection for testing. "
+            "Do not use with launch or landing."
+        ),
     )
 
     return parser.parse_args()
@@ -329,12 +326,32 @@ def main():
     args = parse_arguments()
 
     if args.mock:
-        run_mock_mode(args.backend_url)
-    else:
-        monitor_fc(
+        run_mock_mode(
+            backend_url=args.backend_url,
+            drone_id=args.drone_id,
+            publish_interval=args.interval,
+        )
+
+    elif args.standalone:
+        run_standalone_mode(
             connection_address=args.connection,
             baud_rate=args.baud,
             backend_url=args.backend_url,
+            drone_id=args.drone_id,
+            mission_id=args.mission_id,
+            publish_interval=args.interval,
+        )
+
+    else:
+        print(
+            "fc_status_updated.py is a shared helper."
+        )
+        print(
+            "Use --mock for testing."
+        )
+        print(
+            "Use --standalone only when no other file "
+            "is using the MAVLink connection."
         )
 
 
