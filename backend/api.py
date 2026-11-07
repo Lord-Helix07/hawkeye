@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from signup import router as signup_router
 from view_mission_status import router as missions_router
+from login import router as login_router
 
 app = FastAPI(title="Hawkeye API")
 
@@ -34,6 +35,7 @@ app.add_middleware(
 
 app.include_router(signup_router)  # POST /signup
 app.include_router(missions_router)  # /missions/...
+app.include_router(login_router)   # POST /login
 
 
 @app.get("/server-status")
