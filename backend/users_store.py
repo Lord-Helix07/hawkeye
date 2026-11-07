@@ -4,14 +4,28 @@
 from datetime import datetime, timezone
 import os
 import sys
+import time
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
+from boto3.dynamodb.types import TypeSerializer
 
 
 class BadgeNumTaken(Exception):
     """A user with this badge number already exists."""
+
+
+class EmailTaken(Exception):
+    """A user with this email address already exists."""
+
+
+class LoginLocked(Exception):
+    """A user account is temporarily locked after too many failed logins."""
+
+    def __init__(self, retry_after_seconds: int):
+        self.retry_after_seconds = max(0, retry_after_seconds)
+        super().__init__("Login temporarily locked")
 
 
 class UsersTableSchemaError(Exception):
@@ -22,8 +36,12 @@ def users_table_name() -> str:
     return os.getenv("USERS_TABLE", "Users")
 
 
-def get_dynamodb_resource():
-    """Return a DynamoDB resource using the default credential chain."""
+def users_email_index_table_name() -> str:
+    return os.getenv("USERS_EMAIL_INDEX_TABLE", "UsersByEmail") 
+
+
+def _dynamodb_kwargs() -> dict:
+    """Build shared connection settings for DynamoDB resource and client."""
     region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
     kwargs = {
         "region_name": region,
@@ -36,10 +54,20 @@ def get_dynamodb_resource():
     endpoint_url = os.getenv("DYNAMODB_ENDPOINT_URL")
     if endpoint_url:
         kwargs["endpoint_url"] = endpoint_url
-    return boto3.resource("dynamodb", **kwargs)
+    return kwargs
 
 
-def _table_names(client) -> set[str]:
+def get_dynamodb_resource(): # connect to DynamoDB
+    """Return a DynamoDB resource using the default credential chain."""
+    return boto3.resource("dynamodb", **_dynamodb_kwargs())
+
+
+def get_dynamodb_client():
+    """Return a low-level DynamoDB client for typed transaction requests."""
+    return boto3.client("dynamodb", **_dynamodb_kwargs())
+
+
+def _table_names(client) -> set[str]: # get all table names in the DynamoDB
     names: set[str] = set()
     paginator = client.get_paginator("list_tables")
     for page in paginator.paginate():
@@ -47,23 +75,17 @@ def _table_names(client) -> set[str]:
     return names
 
 
-def ensure_users_table(dynamodb=None):
-    """Create the Users table when it is missing, then return it.
-
-    The partition key matches the shared schema: badge_num (string).
-    """
-    dynamodb = dynamodb or get_dynamodb_resource()
+def _ensure_keyed_table(dynamodb, table_name: str, key_name: str): # ensure the table exists and is keyed correctly
     client = dynamodb.meta.client
-    table_name = users_table_name()
 
     if table_name not in _table_names(client):
         try:
             table = dynamodb.create_table(
                 TableName=table_name,
                 BillingMode="PAY_PER_REQUEST",
-                KeySchema=[{"AttributeName": "badge_num", "KeyType": "HASH"}],
+                KeySchema=[{"AttributeName": key_name, "KeyType": "HASH"}],
                 AttributeDefinitions=[
-                    {"AttributeName": "badge_num", "AttributeType": "S"},
+                    {"AttributeName": key_name, "AttributeType": "S"},
                 ],
             )
         except client.exceptions.ResourceInUseException:
@@ -77,20 +99,51 @@ def ensure_users_table(dynamodb=None):
         for key in description["KeySchema"]
         if key["KeyType"] == "HASH"
     )
-    if hash_key != "badge_num":
+    if hash_key != key_name:
         raise UsersTableSchemaError(
-            f"{table_name} partition key is {hash_key}, expected badge_num"
+            f"{table_name} partition key is {hash_key}, expected {key_name}"
         )
     return dynamodb.Table(table_name)
 
 
-def create_user(badge_num: str, password_hash: str, dynamodb=None) -> None:
-    """Insert a user keyed by badge number. Fails if the badge number is already registered.
+def ensure_users_table(dynamodb=None):
+    """Create or validate the Users table keyed by badge_num."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    return _ensure_keyed_table(dynamodb, users_table_name(), "badge_num")
+
+
+def ensure_email_index_table(dynamodb=None):
+    """Create or validate the table that reserves each email exactly once."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    return _ensure_keyed_table(dynamodb, users_email_index_table_name(), "email")
+
+
+_serializer = TypeSerializer()
+
+
+def _encode_item(item: dict) -> dict:
+    """Convert normal Python values to low-level DynamoDB AttributeValues."""
+    return {key: _serializer.serialize(value) for key, value in item.items()}
+
+
+def create_user( # create a new user and reserve its email 
+    badge_num: str,
+    password_hash: str,
+    email: str,
+    dynamodb=None,
+) -> None:
+    """Insert a user and reserve its email atomically.
+
+    Fails if either the badge number or normalized email is already registered.
     """
+    badge_num = badge_num.strip()
+    email = email.strip().lower()
     dynamodb = dynamodb or get_dynamodb_resource()
     ensure_users_table(dynamodb)
-    client = dynamodb.meta.client
+    ensure_email_index_table(dynamodb)
+    client = get_dynamodb_client()
     table_name = users_table_name()
+    email_index_table_name = users_email_index_table_name()
     created_at = _utc_now()
 
     try:
@@ -99,51 +152,152 @@ def create_user(badge_num: str, password_hash: str, dynamodb=None) -> None:
                 {
                     "Put": {
                         "TableName": table_name,
-                        "Item": {
+                        "Item": _encode_item({
                             "badge_num": badge_num,
-
+                            "email": email,
                             "password_hash": password_hash,
                             "status": "active",
                             "created_at": created_at,
-                        },
+                        }),
                         "ConditionExpression": "attribute_not_exists(badge_num)",
                     }
                 },
-                
+                {
+                    "Put": {
+                        "TableName": email_index_table_name,
+                        "Item": _encode_item({
+                            "email": email,
+                            "badge_num": badge_num,
+                        }),
+                        "ConditionExpression": "attribute_not_exists(email)",
+                    }
+                },
             ]
         )
-    except client.exceptions.TransactionCanceledException as error:
+    except client.exceptions.TransactionCanceledException as error: 
         reasons = error.response.get("CancellationReasons", [])
-        if any(reason.get("Code") == "ConditionalCheckFailed" for reason in reasons):
+        if reasons and reasons[0].get("Code") == "ConditionalCheckFailed":
             raise BadgeNumTaken from error
+        if len(reasons) > 1 and reasons[1].get("Code") == "ConditionalCheckFailed":
+            raise EmailTaken from error
         raise
 
 
-# def _profile_exists(client, table_name: str, username: str, email: str) -> bool:
-#     """Find users loaded before uniqueness records existed."""
-#     paginator = client.get_paginator("scan")
-#     for page in paginator.paginate(
-#         TableName=table_name,
-#         FilterExpression="username = :username OR email = :email",
-#         ExpressionAttributeValues={":username": username, ":email": email},
-#         ProjectionExpression="badge_num",
-#     ):
-#         if page.get("Items"):
-#             return True
-#     return False
 
-
-def _utc_now() -> str:
+def _utc_now() -> str: # get the current UTC time as a string
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def main() -> int:
+def get_user(badge_num: str, dynamodb=None): 
+    """Return one user by badge number, or None when no user exists."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    return table.get_item(
+        Key={"badge_num": badge_num.strip()},
+        ConsistentRead=True,
+    ).get("Item")
+
+
+def clear_expired_login_lock(badge_num: str, dynamodb=None) -> None: # Clear a lock that has already expired and reset failed attempts
+    """Clear a lock that has already expired and reset failed attempts."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    now = int(time.time())
+    try:
+        table.update_item(
+            Key={"badge_num": badge_num.strip()},
+            UpdateExpression="SET failed_attempts = :zero REMOVE locked_until",
+            ConditionExpression=(
+                "attribute_exists(badge_num) AND attribute_exists(locked_until) "
+                "AND locked_until <= :now"
+            ),
+            ExpressionAttributeValues={":zero": 0, ":now": now},
+        )
+    except table.meta.client.exceptions.ConditionalCheckFailedException:
+        pass
+
+
+def record_failed_login( # Record a failed login attempt and lock the account if necessary
+    badge_num: str,
+    dynamodb=None,
+    max_attempts: int = 10,
+    lock_seconds: int = 15 * 60,
+) -> dict:
+    """Atomically count a failed login and lock the account at the limit."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    now = int(time.time())
+
+    try:
+        response = table.update_item(
+            Key={"badge_num": badge_num.strip()},
+            UpdateExpression=(
+                "SET failed_attempts = if_not_exists(failed_attempts, :zero) + :one"
+            ),
+            ConditionExpression=(
+                "attribute_exists(badge_num) AND "
+                "(attribute_not_exists(locked_until) OR locked_until <= :now)"
+            ),
+            ExpressionAttributeValues={":zero": 0, ":one": 1, ":now": now},
+            ReturnValues="UPDATED_NEW",
+        )
+    except table.meta.client.exceptions.ConditionalCheckFailedException as error:
+        user = get_user(badge_num, dynamodb)
+        locked_until = int((user or {}).get("locked_until", 0))
+        if locked_until > now:
+            raise LoginLocked(locked_until - now) from error
+        raise
+
+    failed_attempts = int(response["Attributes"]["failed_attempts"])
+    attempts_remaining = max(0, max_attempts - failed_attempts)
+    if failed_attempts < max_attempts:
+        return {
+            "locked": False,
+            "failed_attempts": failed_attempts,
+            "attempts_remaining": attempts_remaining,
+        }
+
+    locked_until = now + lock_seconds
+    table.update_item(
+        Key={"badge_num": badge_num.strip()},
+        UpdateExpression="SET locked_until = :locked_until",
+        ConditionExpression=(
+            "attribute_exists(badge_num) AND failed_attempts >= :max_attempts"
+        ),
+        ExpressionAttributeValues={
+            ":locked_until": locked_until,
+            ":max_attempts": max_attempts,
+        },
+    )
+    return {
+        "locked": True,
+        "failed_attempts": failed_attempts,
+        "attempts_remaining": 0,
+        "locked_until": locked_until,
+        "retry_after_seconds": lock_seconds,
+    }
+
+
+def reset_login_attempts(badge_num: str, dynamodb=None) -> None:
+    """Clear failed-login state after a successful login."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    table.update_item(
+        Key={"badge_num": badge_num.strip()},
+        UpdateExpression="SET failed_attempts = :zero REMOVE locked_until",
+        ConditionExpression="attribute_exists(badge_num)",
+        ExpressionAttributeValues={":zero": 0},
+    )
+
+
+def main() -> int: # main function to ensure tables exist and print status
     try:
         table = ensure_users_table()
+        email_index = ensure_email_index_table()
     except (BotoCoreError, ClientError, UsersTableSchemaError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    print(f"Users table ready: {table.name}")
+    print(f"Users tables ready: {table.name}, {email_index.name}")
     return 0
 
 
