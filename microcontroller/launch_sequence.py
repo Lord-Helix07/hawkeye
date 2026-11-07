@@ -1,1038 +1,793 @@
+
 from pymavlink import mavutil
 import argparse
 import queue
 import threading
 import time
+import json
+import math
 
 
-# default connection for the Pi and Kakute
+# Pi and Kakute connection
 DEFAULT_CONNECTION = "/dev/ttyACM0"
 DEFAULT_BAUD_RATE = 115200
 
-# SITL can use tcp:127.0.0.1:5760
-
-# 30 ft in meters
+# 30 feet in meters
 TARGET_ALTITUDE = 9.144
-
-# gives some room for altitude readings
 ALTITUDE_TOLERANCE = 0.5
 
-# minimum voltage before launch, still needs testing
-MIN_LAUNCH_VOLTAGE = 22.2
+# battery settings must be confirmed by EE
+DEFAULT_BATTERY_ID = None
+DEFAULT_BATTERY_FORMAT = None
+DEFAULT_MIN_VOLTAGE = None
 
-# how old telemetry can be before we don't trust it
 HEARTBEAT_MAX_AGE = 3.0
 TELEMETRY_MAX_AGE = 5.0
 
-# time limits for each part of launch
 INITIAL_HEARTBEAT_TIMEOUT = 10
-READINESS_TIMEOUT = 10
+READINESS_TIMEOUT = 15
 CONFIRMATION_TIMEOUT = 30
 MODE_TIMEOUT = 10
 ARM_TIMEOUT = 15
 COMMAND_ACK_TIMEOUT = 5
-ALTITUDE_TIMEOUT = 30
+ALTITUDE_TIMEOUT = 45
+PROGRESS_TIMEOUT = 12
+RECOVERY_TIMEOUT = 10
+
+GROUND_ALTITUDE = 0.3
+AIRBORNE_ALTITUDE = 0.8
+MIN_PROGRESS = 0.25
 
 
-def make_status(state, reason=None, reasons=None, **extra):
-    # makes a status that can eventually be sent to backend
-    result = {
-        "state": state,
-        "reason": reason,
-    }
-
-    if reasons is not None:
-        result["reasons"] = reasons
-
+def make_status(state, reason=None, **extra):
+    result = {"state": state, "reason": reason}
     result.update(extra)
-
     return result
 
 
 def report_status(status):
-    # prints for now, backend can use this later
-    print(status)
+    print(json.dumps(status, default=str))
 
 
-def connect(connection_address, baud_rate):
-    # connect to ArduPilot and make sure we get a heartbeat
-    print(
-        f"Connecting to flight controller at "
-        f"{connection_address}..."
+def is_armed(heartbeat):
+    return bool(
+        heartbeat.base_mode
+        & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
     )
 
+
+def connect(address, baud):
+    # open the connection and wait for ArduPilot
     connection = mavutil.mavlink_connection(
-        connection_address,
-        baud=baud_rate
+        address, baud=baud
     )
 
-    heartbeat = connection.wait_heartbeat(
-        timeout=INITIAL_HEARTBEAT_TIMEOUT
-    )
-
-    if heartbeat is None:
-        raise RuntimeError(
-            "No initial heartbeat received from "
-            "the flight controller."
+    try:
+        heartbeat = connection.wait_heartbeat(
+            timeout=INITIAL_HEARTBEAT_TIMEOUT
         )
 
-    print("Flight controller connected.")
+        if heartbeat is None:
+            raise RuntimeError("Initial heartbeat timeout")
 
-    return connection
+        return connection
+
+    except Exception:
+        connection.close()
+        raise
 
 
 class TelemetryCache:
-    # saves the newest MAVLink messages so we don't use old data
+    # save recent messages so we don't use old data
 
     def __init__(self, connection):
         self.connection = connection
         self.messages = {}
-        self.last_heartbeat_time = None
-        self.prearm_messages = []
+        self.batteries = {}
+        self.acks = []
+        self.faults = []
 
     def update(self, timeout=0.2):
         message = self.connection.recv_match(
-            blocking=True,
-            timeout=timeout
+            blocking=True, timeout=timeout
         )
 
         if message is None:
-            return
-
-        message_type = message.get_type()
-        now = time.monotonic()
-
-        self.messages[message_type] = (
-            message,
-            now
-        )
-
-        # keep track of the newest heartbeat
-        if message_type == "HEARTBEAT":
-            self.last_heartbeat_time = now
-
-        # save any pre-arm errors ArduPilot sends
-        if message_type == "STATUSTEXT":
-            text = str(
-                getattr(message, "text", "")
-            )
-
-            if "PreArm:" in text:
-                self.prearm_messages.append(text)
-
-                # only keep the latest 5
-                self.prearm_messages = (
-                    self.prearm_messages[-5:]
-                )
-
-    def get_fresh(
-        self,
-        message_type,
-        max_age=TELEMETRY_MAX_AGE
-    ):
-        # only return the message if it is recent
-        stored = self.messages.get(
-            message_type
-        )
-
-        if stored is None:
             return None
 
-        message, received_time = stored
+        kind = message.get_type()
+        now = time.monotonic()
 
-        age = (
-            time.monotonic()
-            - received_time
-        )
+        if kind == "BAD_DATA":
+            return None
 
-        if age > max_age:
+        self.messages[kind] = (message, now)
+
+        if kind == "BATTERY_STATUS":
+            self.batteries[message.id] = (message, now)
+
+        if kind == "COMMAND_ACK":
+            self.acks.append((message, now))
+
+        if kind == "STATUSTEXT":
+            text = str(getattr(message, "text", ""))
+            severity = getattr(message, "severity", 6)
+
+            if severity <= 3:
+                self.faults.append((text, now))
+
+        return message
+
+    def fresh(self, kind, max_age=TELEMETRY_MAX_AGE):
+        item = self.messages.get(kind)
+
+        if item is None:
+            return None
+
+        message, received = item
+
+        if time.monotonic() - received > max_age:
             return None
 
         return message
 
-    def heartbeat_is_recent(self):
-        if self.last_heartbeat_time is None:
-            return False
+    def battery(self, battery_id):
+        item = self.batteries.get(battery_id)
 
-        age = (
-            time.monotonic()
-            - self.last_heartbeat_time
+        if item is None:
+            return None
+
+        message, received = item
+
+        if time.monotonic() - received > TELEMETRY_MAX_AGE:
+            return None
+
+        return message
+
+    def heartbeat(self):
+        return self.fresh(
+            "HEARTBEAT", HEARTBEAT_MAX_AGE
         )
 
-        return age <= HEARTBEAT_MAX_AGE
+    def recent_faults(self):
+        now = time.monotonic()
+
+        return [
+            text for text, received in self.faults
+            if now - received <= TELEMETRY_MAX_AGE
+        ]
 
 
-def collect_telemetry(cache, duration=3):
-    # collect some data before checking if the drone is ready
-    deadline = (
-        time.monotonic()
-        + duration
-    )
-
-    while time.monotonic() < deadline:
-        cache.update(timeout=0.2)
-
-
-def get_battery_voltage(battery):
-    # get battery voltage from BATTERY_STATUS
+def get_battery_voltage(battery, voltage_format):
+    # ArduPilot may report pack voltage or cell voltages
     if battery is None:
         return None
 
-    voltages = getattr(
-        battery,
-        "voltages",
-        None
+    values = list(getattr(battery, "voltages", []))
+    values += list(
+        getattr(battery, "voltages_ext", [])
     )
 
-    if not voltages:
-        return None
-
-    # ignore values that mean voltage wasn't provided
-    valid_voltages = [
-        voltage
-        for voltage in voltages
-        if voltage not in (0, 65535)
+    valid = [
+        value for value in values
+        if isinstance(value, (int, float))
+        and 0 < value < 65535
     ]
 
-    if not valid_voltages:
-        return None
+    if voltage_format == "pack":
+        if len(valid) != 1:
+            return None
+        return valid[0] / 1000.0
 
-    voltage_mv = valid_voltages[0]
+    if voltage_format == "cells":
+        if len(valid) != 6:
+            return None
+        return sum(valid) / 1000.0
 
-    # convert millivolts to volts
-    return voltage_mv / 1000.0
+    return None
 
 
-def check_readiness(cache):
+def check_readiness(cache, config):
     reasons = []
 
-    # check communication
-    if not cache.heartbeat_is_recent():
-        reasons.append(
-            "Heartbeat is missing or stale."
-        )
+    heartbeat = cache.heartbeat()
 
-    # check ArduPilot pre-arm status and sensors
-    sys_status = cache.get_fresh(
-        "SYS_STATUS"
-    )
+    if heartbeat is None:
+        reasons.append("Heartbeat missing or stale")
+
+    elif is_armed(heartbeat):
+        reasons.append("Drone is already armed")
+
+    sys_status = cache.fresh("SYS_STATUS")
 
     if sys_status is None:
-        reasons.append(
-            "SYS_STATUS telemetry is missing or stale."
-        )
+        reasons.append("SYS_STATUS missing or stale")
 
     else:
-        prearm_bit = (
-            mavutil.mavlink
-            .MAV_SYS_STATUS_PREARM_CHECK
-        )
+        prearm = mavutil.mavlink.MAV_SYS_STATUS_PREARM_CHECK
 
-        prearm_enabled = bool(
-            sys_status
-            .onboard_control_sensors_enabled
-            & prearm_bit
-        )
+        enabled = sys_status.onboard_control_sensors_enabled
+        healthy = sys_status.onboard_control_sensors_health
 
-        prearm_healthy = bool(
-            sys_status
-            .onboard_control_sensors_health
-            & prearm_bit
-        )
+        if not enabled & prearm:
+            reasons.append("Pre-arm status unavailable")
 
-        if not prearm_enabled:
-            reasons.append(
-                "ArduPilot pre-arm status is not available."
-            )
+        elif not healthy & prearm:
+            reasons.append("ArduPilot pre-arm checks failed")
 
-        elif not prearm_healthy:
-            reasons.append(
-                "ArduPilot pre-arm checks are not passing."
-            )
-
-            # add the pre-arm error messages if we have them
-            reasons.extend(
-                cache.prearm_messages[-3:]
-            )
-
-        # check the important sensors that are enabled
         sensor_mask = (
-            mavutil.mavlink
-            .MAV_SYS_STATUS_SENSOR_3D_GYRO
-            |
-            mavutil.mavlink
-            .MAV_SYS_STATUS_SENSOR_3D_ACCEL
-            |
-            mavutil.mavlink
-            .MAV_SYS_STATUS_SENSOR_3D_MAG
-            |
-            mavutil.mavlink
-            .MAV_SYS_STATUS_SENSOR_ABSOLUTE_PRESSURE
-            |
-            mavutil.mavlink
-            .MAV_SYS_STATUS_SENSOR_GPS
+            mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_GYRO
+            | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_ACCEL
+            | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_MAG
+            | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_ABSOLUTE_PRESSURE
+            | mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS
         )
 
-        enabled_sensors = (
-            sys_status
-            .onboard_control_sensors_enabled
-            & sensor_mask
-        )
+        if enabled & sensor_mask & ~healthy:
+            reasons.append("Enabled flight sensor unhealthy")
 
-        healthy_sensors = (
-            sys_status
-            .onboard_control_sensors_health
-            & sensor_mask
-        )
+    # check the selected main battery
+    battery_id = config["battery_id"]
+    voltage_format = config["battery_format"]
+    minimum = config["min_voltage"]
 
-        unhealthy_sensors = (
-            enabled_sensors
-            & ~healthy_sensors
-        )
-
-        if unhealthy_sensors:
-            reasons.append(
-                "One or more enabled flight sensors "
-                "are unhealthy."
-            )
-
-    # check main battery
-    battery = cache.get_fresh(
-        "BATTERY_STATUS"
-    )
-
-    if battery is None:
-        reasons.append(
-            "Battery telemetry is missing or stale."
-        )
+    if (
+        battery_id is None
+        or voltage_format not in ("pack", "cells")
+        or minimum is None
+    ):
+        reasons.append("Main battery configuration not confirmed")
 
     else:
-        battery_voltage = get_battery_voltage(
-            battery
-        )
+        battery = cache.battery(battery_id)
 
-        if battery_voltage is None:
-            reasons.append(
-                "Main battery voltage is unavailable."
+        if battery is None:
+            reasons.append("Main battery telemetry missing")
+
+        else:
+            voltage = get_battery_voltage(
+                battery, voltage_format
             )
 
-        elif battery_voltage < MIN_LAUNCH_VOLTAGE:
-            reasons.append(
-                f"Main battery voltage is too low: "
-                f"{battery_voltage:.2f} V. "
-                f"Minimum launch voltage is "
-                f"{MIN_LAUNCH_VOLTAGE:.2f} V."
-            )
+            if voltage is None:
+                reasons.append("Main battery voltage unavailable")
 
-    # check GPS
-    gps = cache.get_fresh(
-        "GPS_RAW_INT"
-    )
+            elif voltage < minimum:
+                reasons.append(
+                    f"Battery {voltage:.2f} V below "
+                    f"{minimum:.2f} V minimum"
+                )
+
+            charge_state = getattr(battery, "charge_state", 0)
+
+            bad_states = {
+                mavutil.mavlink.MAV_BATTERY_CHARGE_STATE_LOW,
+                mavutil.mavlink.MAV_BATTERY_CHARGE_STATE_CRITICAL,
+                mavutil.mavlink.MAV_BATTERY_CHARGE_STATE_EMERGENCY,
+                mavutil.mavlink.MAV_BATTERY_CHARGE_STATE_FAILED,
+                mavutil.mavlink.MAV_BATTERY_CHARGE_STATE_UNHEALTHY,
+            }
+
+            if charge_state in bad_states:
+                reasons.append("Battery reports unhealthy charge state")
+
+    gps = cache.fresh("GPS_RAW_INT")
 
     if gps is None:
-        reasons.append(
-            "GPS telemetry is missing or stale."
-        )
+        reasons.append("GPS telemetry missing")
 
     elif gps.fix_type < 3:
-        reasons.append(
-            f"GPS does not have a 3D fix. "
-            f"fix_type={gps.fix_type}"
-        )
+        reasons.append("GPS does not have a 3D fix")
 
-    # make sure we have a position
-    position = cache.get_fresh(
-        "GLOBAL_POSITION_INT"
-    )
+    if cache.fresh("GLOBAL_POSITION_INT") is None:
+        reasons.append("Position estimate missing")
 
-    if position is None:
-        reasons.append(
-            "Position estimate is missing or stale."
-        )
+    if cache.recent_faults():
+        reasons.extend(cache.recent_faults())
 
-    # anything in reasons means we aren't ready
-    if reasons:
-        return False, reasons
-
-    return True, []
+    return len(reasons) == 0, reasons
 
 
-def wait_for_readiness(cache):
-    # give the drone time to become ready but don't wait forever
-    deadline = (
-        time.monotonic()
-        + READINESS_TIMEOUT
-    )
+def wait_for_readiness(cache, config):
+    deadline = time.monotonic() + READINESS_TIMEOUT
 
     while time.monotonic() < deadline:
-        cache.update(
-            timeout=0.2
-        )
-
-        ready, reasons = check_readiness(
-            cache
-        )
+        cache.update()
+        ready, reasons = check_readiness(cache, config)
 
         if ready:
             return True, []
 
-    return check_readiness(cache)
+    return check_readiness(cache, config)
 
 
 class OperatorInput:
-    # temporary terminal input until backend confirmation is connected
+    # terminal confirmation for now
 
     def __init__(self):
         self.responses = queue.Queue()
 
-        # read CONFIRM or CANCEL without stopping telemetry checks
-        thread = threading.Thread(
-            target=self._read_input,
+        threading.Thread(
+            target=self.read_input,
             daemon=True
-        )
+        ).start()
 
-        thread.start()
-
-    def _read_input(self):
+    def read_input(self):
         while True:
             try:
-                response = (
-                    input()
-                    .strip()
-                    .upper()
-                )
-
-                self.responses.put(
-                    response
-                )
-
+                response = input().strip().upper()
+                self.responses.put(response)
             except EOFError:
                 return
 
     def get_response(self):
         try:
-            return (
-                self.responses
-                .get_nowait()
-            )
-
+            return self.responses.get_nowait()
         except queue.Empty:
             return None
 
 
-def wait_for_operator_confirmation(
-    cache,
-    operator_input
-):
-    print("Drone is READY.")
+def wait_for_confirmation(cache, config, operator):
+    deadline = time.monotonic() + CONFIRMATION_TIMEOUT
 
-    print(
-        "Type CONFIRM to continue "
-        "or CANCEL to stop."
-    )
-
-    deadline = (
-        time.monotonic()
-        + CONFIRMATION_TIMEOUT
-    )
+    print("READY - type CONFIRM or CANCEL")
 
     while time.monotonic() < deadline:
+        cache.update()
 
-        # update MAVLink data while we wait
-        cache.update(
-            timeout=0.2
-        )
-
-        # if something changes the drone isn't ready anymore
-        ready, reasons = check_readiness(
-            cache
-        )
+        ready, reasons = check_readiness(cache, config)
 
         if not ready:
             return make_status(
                 "NOT_READY",
-                reason=(
-                    "Readiness was lost while "
-                    "waiting for operator confirmation."
-                ),
+                "Readiness lost while waiting",
                 reasons=reasons
             )
 
-        response = (
-            operator_input
-            .get_response()
-        )
+        response = operator.get_response()
 
         if response == "CANCEL":
-            return make_status(
-                "CANCELLED",
-                reason=(
-                    "Operator cancelled launch."
-                )
-            )
+            return make_status("CANCELLED")
 
         if response == "CONFIRM":
-            return make_status(
-                "CONFIRMED",
-                reason=(
-                    "Operator confirmed launch."
-                )
-            )
+            return make_status("CONFIRMED")
 
-    return make_status(
-        "CONFIRMATION_EXPIRED",
-        reason=(
-            "Operator confirmation expired."
-        )
-    )
+    return make_status("CONFIRMATION_EXPIRED")
 
 
-def set_guided_mode(
-    connection,
-    cache
-):
-    # request GUIDED mode
-    print(
-        "Requesting GUIDED mode..."
-    )
+def wait_for_mode(connection, cache, expected, timeout):
+    deadline = time.monotonic() + timeout
 
-    mode_id = (
-        connection
-        .mode_mapping()
-        .get("GUIDED")
-    )
+    while time.monotonic() < deadline:
+        cache.update()
+
+        heartbeat = cache.heartbeat()
+
+        if heartbeat is None:
+            continue
+
+        mode = mavutil.mode_string_v10(heartbeat)
+
+        if mode == expected:
+            return
+
+    raise RuntimeError(f"{expected} mode not confirmed")
+
+
+def set_guided_mode(connection, cache):
+    mode_id = connection.mode_mapping().get("GUIDED")
 
     if mode_id is None:
-        raise RuntimeError(
-            "GUIDED mode is not available."
-        )
+        raise RuntimeError("GUIDED mode unavailable")
 
-    connection.set_mode(
-        mode_id
-    )
+    connection.set_mode(mode_id)
 
-    deadline = (
-        time.monotonic()
-        + MODE_TIMEOUT
-    )
-
-    # wait until ArduPilot actually reports GUIDED
-    while time.monotonic() < deadline:
-        cache.update(
-            timeout=0.2
-        )
-
-        heartbeat = cache.get_fresh(
-            "HEARTBEAT"
-        )
-
-        if heartbeat is None:
-            continue
-
-        mode = (
-            mavutil
-            .mode_string_v10(
-                heartbeat
-            )
-        )
-
-        if mode == "GUIDED":
-            print(
-                "GUIDED mode confirmed."
-            )
-
-            return
-
-    raise RuntimeError(
-        "Timed out waiting for GUIDED mode."
+    wait_for_mode(
+        connection, cache, "GUIDED", MODE_TIMEOUT
     )
 
 
-def wait_for_command_ack(
-    connection,
-    command
-):
-    # make sure ArduPilot actually accepted the command
-    deadline = (
-        time.monotonic()
-        + COMMAND_ACK_TIMEOUT
-    )
+def wait_for_ack(cache, command, sent_at):
+    deadline = time.monotonic() + COMMAND_ACK_TIMEOUT
 
     while time.monotonic() < deadline:
-        ack = connection.recv_match(
-            type="COMMAND_ACK",
-            blocking=True,
-            timeout=1
-        )
+        cache.update()
 
-        if ack is None:
-            continue
+        for ack, received in cache.acks:
+            if received < sent_at or ack.command != command:
+                continue
 
-        # this ACK was for a different command
-        if ack.command != command:
-            continue
+            if ack.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
+                return "ACCEPTED"
 
-        if (
-            ack.result
-            == mavutil.mavlink.MAV_RESULT_ACCEPTED
-        ):
-            return
+            if ack.result == mavutil.mavlink.MAV_RESULT_IN_PROGRESS:
+                return "IN_PROGRESS"
 
-        raise RuntimeError(
-            f"Command {command} was rejected. "
-            f"MAVLink result={ack.result}"
-        )
+            return "REJECTED"
 
-    raise RuntimeError(
-        f"Timed out waiting for acknowledgement "
-        f"of command {command}."
-    )
+    return "UNKNOWN"
 
 
-def arm(
-    connection,
-    cache
-):
-    # request normal arming, don't force arm
-    print(
-        "Requesting arm..."
-    )
+def arm(connection, cache):
+    # normal arm request, never force arm
+    command = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
+
+    sent_at = time.monotonic()
 
     connection.mav.command_long_send(
         connection.target_system,
         connection.target_component,
-
-        mavutil.mavlink
-        .MAV_CMD_COMPONENT_ARM_DISARM,
-
+        command,
         0,
-
-        1,  # arm
-        0,  # normal arm, don't bypass checks
-
-        0,
-        0,
-        0,
-        0,
-        0
+        1, 0, 0, 0, 0, 0, 0
     )
 
-    # make sure ArduPilot accepted it
-    wait_for_command_ack(
-        connection,
-        mavutil.mavlink
-        .MAV_CMD_COMPONENT_ARM_DISARM
-    )
+    ack = wait_for_ack(cache, command, sent_at)
 
-    deadline = (
-        time.monotonic()
-        + ARM_TIMEOUT
-    )
+    if ack == "REJECTED":
+        raise RuntimeError("Arming rejected by ArduPilot")
 
-    # then make sure the heartbeat actually says we're armed
+    deadline = time.monotonic() + ARM_TIMEOUT
+
     while time.monotonic() < deadline:
-        cache.update(
-            timeout=0.2
-        )
+        cache.update()
 
-        heartbeat = cache.get_fresh(
-            "HEARTBEAT"
-        )
+        heartbeat = cache.heartbeat()
 
-        if heartbeat is None:
-            continue
-
-        armed = bool(
-            heartbeat.base_mode
-            & mavutil.mavlink
-            .MAV_MODE_FLAG_SAFETY_ARMED
-        )
-
-        if armed:
-            print(
-                "Drone armed."
-            )
-
+        if heartbeat is not None and is_armed(heartbeat):
             return
 
     raise RuntimeError(
-        "Arm command was accepted, "
-        "but armed state was not confirmed."
+        f"Armed state not confirmed (ACK: {ack})"
     )
 
 
-def takeoff(connection):
-    # send the takeoff command with our target altitude
-    print(
-        f"Requesting takeoff to "
-        f"{TARGET_ALTITUDE:.2f} meters "
-        f"(30 feet)..."
-    )
+def takeoff(connection, cache):
+    command = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
+
+    sent_at = time.monotonic()
 
     connection.mav.command_long_send(
         connection.target_system,
         connection.target_component,
-
-        mavutil.mavlink
-        .MAV_CMD_NAV_TAKEOFF,
-
+        command,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-
+        0, 0, 0, 0, 0, 0,
         TARGET_ALTITUDE
     )
 
-    # make sure ArduPilot accepted the takeoff command
-    wait_for_command_ack(
-        connection,
-        mavutil.mavlink
-        .MAV_CMD_NAV_TAKEOFF
-    )
-
-    print(
-        "Takeoff command accepted."
-    )
+    return wait_for_ack(cache, command, sent_at)
 
 
-def wait_for_target_altitude(
-    connection
-):
-    # keep checking altitude until we reach 30 ft or time out
-    print(
-        "Monitoring altitude..."
-    )
+def get_aircraft_state(cache, takeoff_requested=False):
+    heartbeat = cache.heartbeat()
+    position = cache.fresh("GLOBAL_POSITION_INT")
 
-    deadline = (
-        time.monotonic()
-        + ALTITUDE_TIMEOUT
-    )
+    armed = None
+    altitude = None
+    mode = None
 
-    last_altitude_time = (
-        time.monotonic()
-    )
+    if heartbeat is not None:
+        armed = is_armed(heartbeat)
+        mode = mavutil.mode_string_v10(heartbeat)
+
+    if position is not None:
+        altitude = position.relative_alt / 1000.0
+
+    if armed is False and not takeoff_requested:
+        state = "GROUNDED"
+
+    elif armed and altitude is not None and altitude >= AIRBORNE_ALTITUDE:
+        state = "CONFIRMED_AIRBORNE"
+
+    elif armed or takeoff_requested:
+        state = "POSSIBLY_AIRBORNE"
+
+    else:
+        state = "UNKNOWN"
+
+    return {
+        "state": state,
+        "armed": armed,
+        "altitude_m": altitude,
+        "mode": mode,
+    }
+
+
+def monitor_climb(cache):
+    deadline = time.monotonic() + ALTITUDE_TIMEOUT
+
+    last_progress = time.monotonic()
+    best_altitude = None
 
     while time.monotonic() < deadline:
-        message = connection.recv_match(
-            type="GLOBAL_POSITION_INT",
-            blocking=True,
-            timeout=1
+        cache.update()
+
+        state = get_aircraft_state(
+            cache, takeoff_requested=True
         )
 
-        if message is None:
+        if cache.heartbeat() is None:
+            raise RuntimeError("Heartbeat lost during climb")
 
-            # don't fail from one missed message
-            if (
-                time.monotonic()
-                - last_altitude_time
-                > TELEMETRY_MAX_AGE
-            ):
-                raise RuntimeError(
-                    "Altitude telemetry was lost "
-                    "during takeoff."
-                )
-
-            continue
-
-        last_altitude_time = (
-            time.monotonic()
-        )
-
-        # relative_alt comes in millimeters so convert it to meters
-        current_altitude = (
-            message.relative_alt
-            / 1000.0
-        )
-
-        print(
-            f"Current altitude: "
-            f"{current_altitude:.2f} meters"
-        )
-
-        if current_altitude >= (
-            TARGET_ALTITUDE
-            - ALTITUDE_TOLERANCE
-        ):
-            print(
-                f"Target altitude reached: "
-                f"{current_altitude:.2f} meters"
+        if state["mode"] != "GUIDED":
+            raise RuntimeError(
+                "Flight mode changed during climb"
             )
 
-            return current_altitude
+        if state["armed"] is False:
+            raise RuntimeError(
+                "Drone disarmed during climb"
+            )
 
-    raise RuntimeError(
-        "Timed out waiting to reach "
-        "the target altitude."
+        if cache.recent_faults():
+            raise RuntimeError(
+                "Autopilot fault during climb"
+            )
+
+        altitude = state["altitude_m"]
+
+        if altitude is None:
+            raise RuntimeError("Altitude telemetry missing")
+
+        if (
+            best_altitude is None
+            or altitude >= best_altitude + MIN_PROGRESS
+        ):
+            best_altitude = altitude
+            last_progress = time.monotonic()
+
+        if altitude >= TARGET_ALTITUDE - ALTITUDE_TOLERANCE:
+            return altitude
+
+        if time.monotonic() - last_progress > PROGRESS_TIMEOUT:
+            raise RuntimeError("No altitude progress")
+
+    raise RuntimeError("Target altitude timeout")
+
+
+def automatic_recovery(connection, cache):
+    # only request LAND if we know it's safe to do so
+    state = get_aircraft_state(
+        cache, takeoff_requested=True
     )
+
+    if state["state"] != "CONFIRMED_AIRBORNE":
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            "Aircraft state is uncertain",
+            aircraft=state
+        )
+
+    if state["mode"] != "GUIDED":
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            "Mode changed; manual control or failsafe may be active",
+            aircraft=state
+        )
+
+    if cache.recent_faults():
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            "Autopilot fault detected",
+            aircraft=state
+        )
+
+    mode_id = connection.mode_mapping().get("LAND")
+
+    if mode_id is None:
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            "LAND mode unavailable",
+            aircraft=state
+        )
+
+    connection.set_mode(mode_id)
+
+    try:
+        wait_for_mode(
+            connection, cache, "LAND", RECOVERY_TIMEOUT
+        )
+
+        return make_status(
+            "RECOVERY_LANDING",
+            "LAND mode confirmed; touchdown not yet verified",
+            aircraft=state
+        )
+
+    except Exception as error:
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            str(error),
+            aircraft=state
+        )
 
 
 def run_launch(
     connection_address,
     baud_rate,
+    config,
     execute_flight=False,
-    allow_hardware_flight=False
+    simulation_confirmed=False,
+    allow_hardware_flight=False,
+    auto_recovery_land=False,
 ):
     connection = None
-
-    # keeps track of if takeoff already started
-    airborne = False
+    cache = None
+    takeoff_requested = False
 
     try:
+        report_status(make_status("LAUNCH_REQUEST_RECEIVED"))
 
-        # launch request received
-        report_status(
-            make_status(
-                "LAUNCH_REQUEST_RECEIVED"
-            )
-        )
+        connection = connect(connection_address, baud_rate)
+        cache = TelemetryCache(connection)
 
-        # connect to the Kakute
-        connection = connect(
-            connection_address,
-            baud_rate
-        )
-
-        cache = TelemetryCache(
-            connection
-        )
-
-        # get enough telemetry for the readiness check
-        collect_telemetry(
-            cache,
-            duration=3
-        )
-
-        # check if we're ready
-        ready, reasons = wait_for_readiness(
-            cache
-        )
+        ready, reasons = wait_for_readiness(cache, config)
 
         if not ready:
-            status = make_status(
+            return make_status(
                 "NOT_READY",
-                reason=(
-                    "Vehicle failed readiness checks."
-                ),
                 reasons=reasons
             )
 
-            report_status(status)
+        report_status(make_status("READY"))
 
-            return status
-
-        status = make_status(
-            "READY",
-            reason=(
-                "Vehicle passed readiness checks."
-            )
+        confirmation = wait_for_confirmation(
+            cache, config, OperatorInput()
         )
 
-        report_status(status)
-
-        # wait for operator confirmation
-        operator_input = OperatorInput()
-
-        confirmation = (
-            wait_for_operator_confirmation(
-                cache,
-                operator_input
-            )
-        )
-
-        report_status(
-            confirmation
-        )
-
-        if (
-            confirmation["state"]
-            != "CONFIRMED"
-        ):
+        if confirmation["state"] != "CONFIRMED":
             return confirmation
 
-        # check readiness again before doing anything
-        ready, reasons = check_readiness(
-            cache
-        )
+        cache.update()
+        ready, reasons = check_readiness(cache, config)
 
         if not ready:
-            status = make_status(
+            return make_status(
                 "NOT_READY",
-                reason=(
-                    "Readiness changed before launch."
-                ),
+                "Readiness changed after confirmation",
                 reasons=reasons
             )
 
-            report_status(status)
-
-            return status
-
-        # don't actually fly unless it was specifically enabled
         if not execute_flight:
-            status = make_status(
-                "FLIGHT_DISABLED",
-                reason=(
-                    "Pre-launch checks passed, "
-                    "but flight execution is disabled."
-                )
+            return make_status("FLIGHT_DISABLED")
+
+        if simulation_confirmed == allow_hardware_flight:
+            return make_status(
+                "AUTHORIZATION_REQUIRED",
+                "Select exactly one verified execution environment"
             )
 
-            report_status(status)
+        set_guided_mode(connection, cache)
 
-            return status
+        # check again right before arming
+        cache.update()
+        ready, reasons = check_readiness(cache, config)
 
-        # check if we're running SITL
-        is_sitl = (
-            connection_address.startswith(
-                (
-                    "tcp:",
-                    "udp:",
-                    "udpin:",
-                    "udpout:"
-                )
-            )
-        )
-
-        # real hardware needs another explicit flag
-        if (
-            not is_sitl
-            and not allow_hardware_flight
-        ):
-            status = make_status(
-                "HARDWARE_FLIGHT_BLOCKED",
-                reason=(
-                    "Real hardware flight requires "
-                    "explicit approval."
-                )
+        if not ready:
+            return make_status(
+                "NOT_READY",
+                "Readiness changed after GUIDED mode",
+                reasons=reasons
             )
 
-            report_status(status)
+        arm(connection, cache)
 
-            return status
+        takeoff_requested = True
+        ack = takeoff(connection, cache)
 
-        # switch to GUIDED
-        set_guided_mode(
-            connection,
-            cache
-        )
+        if ack == "REJECTED":
+            raise RuntimeError(
+                "Takeoff command rejected; aircraft state must be verified"
+            )
 
-        # arm
-        arm(
-            connection,
-            cache
-        )
+        altitude = monitor_climb(cache)
 
-        # send takeoff command
-        takeoff(
-            connection
-        )
-
-        # after this the drone could be in the air
-        airborne = True
-
-        # wait until we reach 30 ft
-        altitude = wait_for_target_altitude(
-            connection
-        )
-
-        # launch finished
-        status = make_status(
+        return make_status(
             "LAUNCH_SUCCEEDED",
-            reason=(
-                "Target altitude reached."
-            ),
-            altitude_m=altitude
+            "Target altitude reached",
+            altitude_m=altitude,
+            takeoff_ack=ack
         )
-
-        report_status(status)
-
-        return status
 
     except Exception as error:
-
-        # failure before takeoff
-        if not airborne:
-            status = make_status(
+        if cache is None:
+            return make_status(
                 "LAUNCH_FAILED",
-                reason=str(error),
-                airborne=False
+                str(error)
             )
 
-        # different status if takeoff already started
-        else:
-            status = make_status(
-                "AIRBORNE_FAILURE",
-                reason=str(error),
-                airborne=True
+        # collect fresh telemetry before deciding recovery
+        end = time.monotonic() + 2
+
+        while time.monotonic() < end:
+            cache.update()
+
+        state = get_aircraft_state(
+            cache, takeoff_requested=takeoff_requested
+        )
+
+        if state["state"] == "GROUNDED":
+            return make_status(
+                "LAUNCH_FAILED",
+                str(error),
+                aircraft=state
             )
 
-        report_status(status)
+        if auto_recovery_land and connection is not None:
+            recovery = automatic_recovery(connection, cache)
 
-        return status
+            return make_status(
+                "LAUNCH_INTERRUPTED",
+                str(error),
+                aircraft=state,
+                recovery=recovery
+            )
+
+        return make_status(
+            "RECOVERY_HANDOFF_REQUIRED",
+            str(error),
+            aircraft=state
+        )
 
     finally:
-
-        # always close the connection when we're done
         if connection is not None:
             try:
                 connection.close()
-
-                print(
-                    "Flight controller "
-                    "connection closed."
-                )
-
             except Exception:
                 pass
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description=(
-            "HawkEye Raspberry Pi launch sequence"
-        )
-    )
+    parser = argparse.ArgumentParser()
 
     parser.add_argument(
         "--connection",
-        default=DEFAULT_CONNECTION,
-        help=(
-            "MAVLink connection. "
-            "Pi: /dev/ttyACM0 "
-            "SITL: tcp:127.0.0.1:5760"
-        )
+        default=DEFAULT_CONNECTION
     )
 
     parser.add_argument(
         "--baud",
         type=int,
-        default=DEFAULT_BAUD_RATE,
-        help=(
-            "Serial baud rate. "
-            "Default: 115200"
-        )
+        default=DEFAULT_BAUD_RATE
+    )
+
+    parser.add_argument(
+        "--battery-id",
+        type=int,
+        default=DEFAULT_BATTERY_ID
+    )
+
+    parser.add_argument(
+        "--battery-format",
+        choices=["pack", "cells"],
+        default=DEFAULT_BATTERY_FORMAT
+    )
+
+    parser.add_argument(
+        "--min-launch-voltage",
+        type=float,
+        default=DEFAULT_MIN_VOLTAGE
     )
 
     parser.add_argument(
         "--execute-flight",
-        action="store_true",
-        help=(
-            "Enable arming and takeoff. "
-            "Flight is disabled by default."
-        )
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--simulation-confirmed",
+        action="store_true"
     )
 
     parser.add_argument(
         "--allow-hardware-flight",
-        action="store_true",
-        help=(
-            "Additional explicit opt-in required "
-            "for real hardware flight."
-        )
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--auto-recovery-land",
+        action="store_true"
     )
 
     return parser.parse_args()
@@ -1041,20 +796,23 @@ def parse_args():
 def main():
     args = parse_args()
 
-    run_launch(
-        connection_address=(
-            args.connection
-        ),
-        baud_rate=(
-            args.baud
-        ),
-        execute_flight=(
-            args.execute_flight
-        ),
-        allow_hardware_flight=(
-            args.allow_hardware_flight
-        )
+    config = {
+        "battery_id": args.battery_id,
+        "battery_format": args.battery_format,
+        "min_voltage": args.min_launch_voltage,
+    }
+
+    result = run_launch(
+        connection_address=args.connection,
+        baud_rate=args.baud,
+        config=config,
+        execute_flight=args.execute_flight,
+        simulation_confirmed=args.simulation_confirmed,
+        allow_hardware_flight=args.allow_hardware_flight,
+        auto_recovery_land=args.auto_recovery_land,
     )
+
+    report_status(result)
 
 
 if __name__ == "__main__":
