@@ -1,11 +1,13 @@
 //register page
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
 import { signUp } from '../services/auth.js'
 import '../styles/register.css'
 
 export default function Register() {
   const navigate = useNavigate()
+  useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -22,7 +24,7 @@ export default function Register() {
     setSubmitting(true)
     try {
       await signUp(badge, password) // saves the account in DynamoDB
-      navigate('/login')
+      navigate('/login', { replace: true, state: LANDING_BEHIND })
     } catch (err) {
       setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message)
     } finally {
@@ -98,7 +100,7 @@ export default function Register() {
 
       <p className="auth-switch">
         Already have an account?{' '}
-        <button onClick={() => navigate('/login')}>Sign in.</button>
+        <button onClick={() => navigate('/login', { replace: true, state: LANDING_BEHIND })}>Sign in.</button>
       </p>
     </main>
   )

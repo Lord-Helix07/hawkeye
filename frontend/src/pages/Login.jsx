@@ -1,10 +1,12 @@
 //login page
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
 import '../styles/login.css'
 
 export default function Login() {
   const navigate = useNavigate()
+  useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
 
@@ -79,7 +81,7 @@ export default function Login() {
 
       <p className="auth-switch">
         Don’t have an account?{' '}
-        <button onClick={() => navigate('/register')}>Register now.</button>
+        <button onClick={() => navigate('/register', { replace: true, state: LANDING_BEHIND })}>Register now.</button>
       </p>
     </main>
   )

@@ -1,6 +1,7 @@
 // initial page u see
 import '../styles/landing.css'
 import { useNavigate } from 'react-router-dom'
+import { LANDING_BEHIND } from '../hooks/useBackToLanding.js'
 
 const activity = [
   { time: '21:04:12', text: 'Officer input data: [silver sedan], [JLS24K], [northbound]' },
@@ -54,8 +55,8 @@ export default function Landing() {
       </svg>
           Hawkeye</span>
         <div className="landing-auth">
-          <button className="login-btn" onClick={() => navigate('/login')}>Log in</button>
-          <button className="signup-btn" onClick={() => navigate('/register')}>Sign up</button>
+          <button className="login-btn" onClick={() => navigate('/login', { state: LANDING_BEHIND })}>Log in</button>
+          <button className="signup-btn" onClick={() => navigate('/register', { state: LANDING_BEHIND })}>Sign up</button>
         </div>
       </header>
 
