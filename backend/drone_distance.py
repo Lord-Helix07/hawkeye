@@ -11,12 +11,11 @@ import numpy as np
 
 # x and y are pixels. x is from the left edge, y is from the top.
 ImageCenter = namedtuple("ImageCenter", ["x", "y"])
-# x is how far ray travels right per unit forward, y is how far down per unit forward, z is how fat forward
+# x is how far ray travels right per unit forward, y is how far down per unit forward, z is how far forward
 Ray = namedtuple("Ray", ["x", "y", "z"])
 
 
 def image_center(frame_width, frame_height):
-    """The middle of the photo."""
     return ImageCenter(frame_width / 2, frame_height / 2)
 
 # Pixel gap from the center of the picture to the center of the car.
@@ -38,6 +37,8 @@ def distance_from_car_center(frame_width, frame_height, car_center_x, car_center
 
 # Each photo package has what changes with that frame: the photo, the car
 # center, the drone's altitude above the level road, and the drone's pitch and roll.
+# latitude and longitude are the drone's GPS at the time of that photo. heading
+# is degrees clockwise from north.
 # The camera argument stays fixed: field of view and how the camera is mounted.
 # Frame size, image center, and focal length are computed here.
 def ground_distance_m(package, camera):
@@ -49,14 +50,12 @@ def ground_distance_m(package, camera):
     offset_y = package["center_y"] - center.y
     altitude_m = package["altitude"]
     
-    if altitude_m <= 0:
-        raise ValueError("altitude must be above the road")
-    #focal length is the distance from the lens to the image sensor --> need it to convert pixels to meters
+    #focal length is the distance from the lens to the image sensor --> help us get the rays
     focal_x = center.x / tan(radians(camera["horizontal_fov"]) / 2)
     focal_y = center.y / tan(radians(camera["vertical_fov"]) / 2)
 
-    #-------------- dealing w rayssss
-    #makeing our ray based off the offset from the center of image, z is 1 because the ray starts at the lens
+    #-------------- dealing w rays
+    #making our ray based off the offset from the center of image, z is 1 because the ray starts at the lens
     car_ray = Ray(offset_x / focal_x, offset_y / focal_y, 1)
     # modify the ray based off of the roll, use sin on the x because it moves the ray right, cos on the y because it moves the ray down
     roll = radians(package.get("roll", 0))
@@ -86,12 +85,29 @@ def ground_distance_m(package, camera):
     offset_x_m = scale * car_ray.x
     #same stuff but how far it travels forward(in front of da drone) in meters 
     offset_y_m = scale * car_ray.z
+    # take how x left and how y in front !!!!!!!!! and put that jawn into gps coords for Pranav n em 
+    return desired_gps(offset_x_m, offset_y_m, package["latitude"], package["longitude"], package["heading"])
+
+
+# Same radius AssignDrone uses for distances on the Earth.
+_EARTH_RADIUS_M = 6371000
+
+#js add offset to the curr gps to get desired gps loc
+def desired_gps(offset_x_m, offset_y_m, curr_latitude, curr_longitude, heading_deg):
+    heading = radians(heading_deg)
+    north_m = offset_y_m * cos(heading) - offset_x_m * sin(heading)
+    east_m = offset_y_m * sin(heading) + offset_x_m * cos(heading)
+    lat_rad = radians(curr_latitude)
     return {
-        "offset_x_m": offset_x_m,
-        "offset_y_m": offset_y_m,
+        "latitude": curr_latitude + degrees(north_m / _EARTH_RADIUS_M),
+        "longitude": curr_longitude + degrees(east_m / (_EARTH_RADIUS_M * cos(lat_rad))),
     }
 
 
+
+
+
+#----
 # Temporary stand-in until the Pi stream and the flight controller are connected.
 # Sony IMX708, the Camera Module 3 sensor: 4608 x 2592 pixels, 1.4 µ (mu reference) m each.
 # The stock lens is not 6 mm. These angles are a 6 mm lens on that sensor.
@@ -122,4 +138,7 @@ def fake_package(center_x=None, center_y=None, pitch=0, roll=0):
         "altitude": _DRONE_ALTITUDE_M,
         "pitch": pitch,
         "roll": roll,
+        "latitude": 0,
+        "longitude": 0,
+        "heading": 0,
     }
