@@ -16,8 +16,6 @@ TELEMETRY_MAX_AGE = 5.0
 LAND_MODE_TIMEOUT = 10
 LANDING_TIMEOUT = 90
 
-# flight commands are disabled unless specifically enabled
-
 
 def make_status(state, reason=None, **extra):
     result = {
@@ -29,12 +27,12 @@ def make_status(state, reason=None, **extra):
 
 
 def report_status(status):
-    # prints for now, backend can connect this later
+    # backend can use these statuses later
     print(json.dumps(status, default=str))
 
 
 def connect(connection_address, baud_rate):
-    # connect to ArduPilot and wait for the first heartbeat
+    # connect to the Kakute and wait for heartbeat
     connection = mavutil.mavlink_connection(
         connection_address,
         baud=baud_rate
@@ -53,7 +51,11 @@ def connect(connection_address, baud_rate):
         return connection
 
     except Exception:
-        connection.close()
+        # keep the original error if close also fails
+        try:
+            connection.close()
+        except Exception:
+            pass
         raise
 
 
@@ -65,11 +67,13 @@ def is_armed(heartbeat):
 
 
 class LandingTelemetry:
-    # stores the newest messages and when they arrived
+    # save recent messages and when they arrived
 
     def __init__(self, connection):
         self.connection = connection
         self.messages = {}
+        self.acks = []
+        self.sequence = 0
 
     def update(self, timeout=0.2):
         message = self.connection.recv_match(
@@ -85,20 +89,34 @@ class LandingTelemetry:
         if message_type == "BAD_DATA":
             return None
 
+        self.sequence += 1
+        now = time.monotonic()
+
         self.messages[message_type] = (
             message,
-            time.monotonic()
+            now,
+            self.sequence
         )
+
+        if message_type == "COMMAND_ACK":
+            self.acks.append(
+                (message, self.sequence)
+            )
+            self.acks = self.acks[-50:]
 
         return message
 
-    def fresh(self, message_type, max_age=TELEMETRY_MAX_AGE):
+    def fresh(
+        self,
+        message_type,
+        max_age=TELEMETRY_MAX_AGE
+    ):
         stored = self.messages.get(message_type)
 
         if stored is None:
             return None
 
-        message, received_at = stored
+        message, received_at, _ = stored
 
         if time.monotonic() - received_at > max_age:
             return None
@@ -117,7 +135,7 @@ class LandingTelemetry:
         if position is None:
             return None
 
-        # relative altitude is in millimeters
+        # relative altitude is only for monitoring
         return position.relative_alt / 1000.0
 
     def landed_state(self):
@@ -149,7 +167,7 @@ def get_aircraft_status(cache):
 
 
 def check_telemetry(cache):
-    # check freshness even if other messages keep arriving
+    # check freshness every loop
     if cache.heartbeat() is None:
         return "Heartbeat missing or stale"
 
@@ -162,56 +180,175 @@ def check_telemetry(cache):
     return None
 
 
+def prepare_mode_request(cache):
+    # clear already buffered ACKs before sending
+    deadline = time.monotonic() + 0.3
+
+    while time.monotonic() < deadline:
+        message = cache.update(timeout=0)
+
+        if message is None:
+            break
+
+    cache.acks.clear()
+    return cache.sequence
+
+
 def request_land_mode(connection, cache):
-    # ask ArduPilot to land at the current location
-    mode_id = connection.mode_mapping().get("LAND")
+    # check if LAND is available
+    mode_map = connection.mode_mapping()
+
+    if not mode_map or "LAND" not in mode_map:
+        return make_status(
+            "LANDING_NOT_AVAILABLE",
+            "LAND mode mapping is unavailable.",
+            request_attempted=False,
+            request_sent=False,
+            write_completed=False,
+            land_confirmed=False
+        )
+
+    mode_id = mode_map["LAND"]
 
     if mode_id is None:
         return make_status(
             "LANDING_NOT_AVAILABLE",
-            "LAND mode is unavailable."
+            "LAND mode is unavailable.",
+            request_attempted=False,
+            request_sent=False,
+            write_completed=False,
+            land_confirmed=False
         )
 
-    connection.set_mode(mode_id)
+    start_sequence = prepare_mode_request(cache)
+
+    # keep track of whether the write finished
+    request_attempted = True
+    write_completed = False
+
+    try:
+        connection.set_mode(mode_id)
+        write_completed = True
+
+    except Exception as error:
+        # a write error doesn't prove nothing was transmitted
+        return make_status(
+            "LANDING_OUTCOME_UNKNOWN",
+            "LAND write outcome uncertain: " + str(error),
+            request_attempted=request_attempted,
+            request_sent=None,
+            write_completed=False,
+            land_confirmed=False
+        )
 
     deadline = time.monotonic() + LAND_MODE_TIMEOUT
+    ack_sequence = start_sequence
+    interim_ack = False
+
+    mode_command = (
+        mavutil.mavlink.MAV_CMD_DO_SET_MODE
+    )
 
     while time.monotonic() < deadline:
-        cache.update()
+        try:
+            cache.update(timeout=0.2)
+
+        except Exception as error:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                "Telemetry error after LAND request: "
+                + str(error),
+                request_attempted=True,
+                request_sent=True,
+                write_completed=True,
+                land_confirmed=False
+            )
 
         heartbeat = cache.heartbeat()
 
-        if heartbeat is None:
-            continue
-
-        current_mode = mavutil.mode_string_v10(
-            heartbeat
-        )
-
-        if current_mode == "LAND":
-            return make_status(
-                "LAND_CONFIRMED",
-                "ArduPilot reports LAND mode."
+        # heartbeat is the final check for actual mode
+        if heartbeat is not None:
+            current_mode = mavutil.mode_string_v10(
+                heartbeat
             )
 
-    # no confirmation does not mean the command failed
+            if current_mode == "LAND":
+                return make_status(
+                    "LAND_CONFIRMED",
+                    "ArduPilot reports LAND mode.",
+                    request_attempted=True,
+                    request_sent=True,
+                    write_completed=True,
+                    land_confirmed=True
+                )
+
+        # check any new ACKs for the mode command
+        for ack, sequence in cache.acks:
+            if sequence <= ack_sequence:
+                continue
+
+            ack_sequence = sequence
+
+            if ack.command != mode_command:
+                continue
+
+            if (
+                ack.result
+                == mavutil.mavlink.MAV_RESULT_IN_PROGRESS
+            ):
+                interim_ack = True
+                continue
+
+            if (
+                ack.result
+                == mavutil.mavlink.MAV_RESULT_ACCEPTED
+            ):
+                # accepted still needs LAND telemetry
+                continue
+
+            return make_status(
+                "LANDING_REJECTED",
+                f"ArduPilot rejected LAND mode: "
+                f"MAVLink result {ack.result}",
+                request_attempted=True,
+                request_sent=True,
+                write_completed=True,
+                land_confirmed=False
+            )
+
+    # silence doesn't prove LAND failed
     return make_status(
         "LANDING_OUTCOME_UNKNOWN",
-        "LAND was requested, but mode change was not confirmed.",
-        request_sent=True
+        "LAND request completed but mode was not confirmed.",
+        request_attempted=True,
+        request_sent=True,
+        write_completed=True,
+        land_confirmed=False,
+        interim_ack=interim_ack
     )
 
 
 def monitor_landing(connection, cache):
-    # watch the aircraft until landing is verified or time runs out
+    # monitor landing without changing motor commands
     deadline = time.monotonic() + LANDING_TIMEOUT
 
-    on_ground = mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND
+    on_ground = (
+        mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND
+    )
 
     while time.monotonic() < deadline:
-        cache.update()
+        try:
+            cache.update(timeout=0.2)
 
-        # check freshness on every loop
+        except Exception as error:
+            return make_status(
+                "LANDING_OUTCOME_UNKNOWN",
+                "Telemetry error during landing: "
+                + str(error),
+                aircraft=get_aircraft_status(cache)
+            )
+
+        # check ages even when other messages arrive
         telemetry_error = check_telemetry(cache)
 
         if telemetry_error:
@@ -223,7 +360,7 @@ def monitor_landing(connection, cache):
 
         aircraft = get_aircraft_status(cache)
 
-        # both landed state and disarming are required
+        # both disarmed and ON_GROUND are required
         if (
             aircraft["armed"] is False
             and aircraft["landed_state"] == on_ground
@@ -234,7 +371,7 @@ def monitor_landing(connection, cache):
                 aircraft=aircraft
             )
 
-        # do not override manual control or failsafes
+        # don't override manual takeover or failsafe
         if aircraft["mode"] != "LAND":
             return make_status(
                 "LANDING_CONTROL_CHANGED",
@@ -244,7 +381,8 @@ def monitor_landing(connection, cache):
 
     return make_status(
         "LANDING_OUTCOME_UNKNOWN",
-        "Landing monitoring timed out. Aircraft may still be landing.",
+        "Landing monitoring timed out. "
+        "Aircraft may still be landing.",
         aircraft=get_aircraft_status(cache)
     )
 
@@ -258,7 +396,9 @@ def run_landing(
 ):
     connection = None
     cache = None
-    request_sent = False
+
+    request_attempted = False
+    write_completed = False
 
     try:
         report_status(
@@ -275,8 +415,10 @@ def run_landing(
 
         cache = LandingTelemetry(connection)
 
-        # collect initial telemetry
-        deadline = time.monotonic() + TELEMETRY_MAX_AGE
+        # collect the first telemetry messages
+        deadline = (
+            time.monotonic() + TELEMETRY_MAX_AGE
+        )
 
         while time.monotonic() < deadline:
             cache.update()
@@ -293,10 +435,11 @@ def run_landing(
         if aircraft["armed"] is None:
             return make_status(
                 "LANDING_OUTCOME_UNKNOWN",
-                "Current armed state is unknown."
+                "Current armed state is unknown.",
+                request_sent=False
             )
 
-        # don't assume disarmed automatically means landed
+        # disarmed alone doesn't prove landed
         if aircraft["armed"] is False:
             if (
                 aircraft["landed_state"]
@@ -304,25 +447,29 @@ def run_landing(
             ):
                 return make_status(
                     "LANDING_NOT_REQUIRED",
-                    "Aircraft is already on ground and disarmed."
+                    "Aircraft is already on ground and disarmed.",
+                    request_sent=False
                 )
 
             return make_status(
                 "LANDING_OUTCOME_UNKNOWN",
-                "Aircraft is disarmed, but ground state is not confirmed."
+                "Aircraft is disarmed, but ground state is not confirmed.",
+                request_sent=False
             )
 
         if not execute_landing:
             return make_status(
                 "LANDING_DISABLED",
-                "Landing execution is disabled."
+                "Landing execution is disabled.",
+                request_sent=False
             )
 
-        # transport type does not prove simulation
+        # transport type doesn't prove it's SITL
         if simulation_confirmed == allow_hardware_landing:
             return make_status(
                 "AUTHORIZATION_REQUIRED",
-                "Select exactly one verified execution environment."
+                "Select exactly one verified execution environment.",
+                request_sent=False
             )
 
         telemetry_error = check_telemetry(cache)
@@ -330,15 +477,22 @@ def run_landing(
         if telemetry_error:
             return make_status(
                 "LANDING_OUTCOME_UNKNOWN",
-                telemetry_error
+                telemetry_error,
+                request_sent=False
             )
 
-        # clicking Land Drone is already the operator request
-        request_sent = True
-
+        # the frontend button is already the operator request
         result = request_land_mode(
             connection,
             cache
+        )
+
+        request_attempted = result.get(
+            "request_attempted", False
+        )
+
+        write_completed = result.get(
+            "write_completed", False
         )
 
         report_status(result)
@@ -353,27 +507,34 @@ def run_landing(
             )
         )
 
-        return monitor_landing(
+        status = monitor_landing(
             connection,
             cache
         )
 
+        return status
+
     except Exception as error:
-        if request_sent:
+        if request_attempted:
             return make_status(
                 "LANDING_OUTCOME_UNKNOWN",
                 str(error),
-                request_sent=True
+                request_attempted=True,
+                request_sent=(
+                    True if write_completed else None
+                ),
+                write_completed=write_completed
             )
 
         return make_status(
             "LANDING_FAILED_TO_START",
             str(error),
+            request_attempted=False,
             request_sent=False
         )
 
     finally:
-        # close the connection whether landing succeeds or fails
+        # close the connection even if something fails
         if connection is not None:
             try:
                 connection.close()
