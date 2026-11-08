@@ -10,10 +10,10 @@ from database.database import get_dynamodb_resource
 
 
 #from shivaji
-def assign_nearest_drone(mission_id):
+def assign_nearest_drone(mission_id, dynamodb=None):
     """Assign the nearest available live drone and return the updated mission."""
     #all the tables we will need 
-    dynamodb = get_dynamodb_resource()
+    dynamodb = dynamodb or get_dynamodb_resource()
     #by setting dynamodb to the get_dynamodb_resource, we get to use it for all the tables
     missions = dynamodb.Table("Missions")
     drones = dynamodb.Table("Drones")
@@ -68,7 +68,7 @@ def assign_nearest_drone(mission_id):
             {"Update": {
                 "TableName": "Missions",
                 "Key": {"mission_id": mission_id},
-                "UpdateExpression": "SET drone_id = :drone, assigned_drone_id = :drone, assignment_distance_m = :distance",
+                "UpdateExpression": "SET drone_id = :drone, assignment_distance_m = :distance",
                 "ConditionExpression": "attribute_exists(mission_id) AND attribute_not_exists(drone_id) AND attribute_not_exists(assigned_drone_id)",
                 "ExpressionAttributeValues": {":drone": drone_id, ":distance": distance},
             }},

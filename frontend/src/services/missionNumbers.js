@@ -24,7 +24,9 @@ export async function fetchNextMissionId() {
 }
 
 // POST /missions -> the saved mission, e.g. { mission_id: "0003", status: "pending", ... }
-export async function createMission(form) {
+// location ({ latitude, longitude } or null) is where the drone should fly to;
+// the backend uses it to pick the nearest drone.
+export async function createMission(form, location = null) {
   const response = await fetch(`${API_URL}/missions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -33,6 +35,8 @@ export async function createMission(form) {
       model: form.model.trim(),
       color: form.color.trim(),
       license_plate: form.plate.trim(), // the form calls it "plate", the backend "license_plate"
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
     }),
   })
   if (response.status === 422) {

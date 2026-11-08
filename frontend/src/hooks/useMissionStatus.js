@@ -1,15 +1,16 @@
 // Keeps a mission's live status in state, refreshing every few seconds.
 //
-//   const { status, error } = useMissionStatus('0001')
+//   const { status, error, refresh } = useMissionStatus('0001')
 //
 // status is null until the first answer arrives.
 // error is '' when everything is fine, otherwise a message to show the officer.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { USE_MOCK, createMockStatus, fetchMissionStatus } from '../services/missionStatus.js'
 
 export function useMissionStatus(missionId, intervalMs = 2000) {
   const [status, setStatus] = useState(null)
   const [error, setError] = useState('')
+  const [refreshCount, setRefreshCount] = useState(0) // bump to load again right away
 
   useEffect(() => {
     let tick = 0
@@ -36,7 +37,8 @@ export function useMissionStatus(missionId, intervalMs = 2000) {
       cancelled = true
       clearInterval(timer)
     }
-  }, [missionId, intervalMs])
+  }, [missionId, intervalMs, refreshCount])
 
-  return { status, error }
+  const refresh = useCallback(() => setRefreshCount((count) => count + 1), [])
+  return { status, error, refresh }
 }

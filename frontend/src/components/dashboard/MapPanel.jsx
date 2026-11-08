@@ -13,16 +13,19 @@ function toPercent(value, center, span, min, max) {
 }
 
 export function MapPanel({ latitude, longitude, center, label = 'Drone' }) {
+  const hasPosition = latitude != null && longitude != null
   const left = toPercent(longitude, center.longitude, SPAN.longitude, 8, 92)
   // north is up; leaves room at the bottom for the label under the dot
   const top = 100 - toPercent(latitude, center.latitude, SPAN.latitude, 15, 92)
 
   return (
     <div className="map-box">
-      <div className="drone-pin" style={{ left: `${left}%`, top: `${top}%` }}>
-        <div className="drone-marker" />
-        <p className="drone-text">{label}</p>
-      </div>
+      {hasPosition && (
+        <div className="drone-pin" style={{ left: `${left}%`, top: `${top}%` }}>
+          <div className="drone-marker" />
+          <p className="drone-text">{label}</p>
+        </div>
+      )}
       <p className="map-coords">{formatCoordinates(latitude, longitude)}</p>
     </div>
   )

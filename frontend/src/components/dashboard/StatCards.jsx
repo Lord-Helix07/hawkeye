@@ -14,7 +14,20 @@ function ProgressBar({ percent, tone }) {
   )
 }
 
+// shown before the drone has sent that number
+function EmptyStat({ title }) {
+  return (
+    <div className="card stat-card">
+      <p className="box-title">{title}</p>
+      <p className="stat-value">—</p>
+      <p className="stat-note">No data yet</p>
+      <ProgressBar percent={0} tone="good" />
+    </div>
+  )
+}
+
 export function SpeedCard({ speedMps }) {
+  if (speedMps == null) return <EmptyStat title="SPEED" />
   const kmh = metersPerSecondToKmh(speedMps)
   const tooFast = kmh > SPEED_LIMIT_KMH
   const tone = tooFast ? 'warn' : 'good'
@@ -32,6 +45,7 @@ export function SpeedCard({ speedMps }) {
 }
 
 export function BatteryCard({ percent }) {
+  if (percent == null) return <EmptyStat title="BATTERY" />
   const low = percent <= LOW_BATTERY_PERCENT
   const tone = low ? 'warn' : 'good'
 
@@ -49,7 +63,11 @@ export function TargetCard({ inFrame }) {
   return (
     <div className="card stat-card">
       <p className="box-title">TARGET IN FRAME</p>
-      <p className={`target-status ${inFrame ? 'good' : 'warn'}`}>{inFrame ? 'Yes' : 'No'}</p>
+      {inFrame == null ? (
+        <p className="target-status">—</p>
+      ) : (
+        <p className={`target-status ${inFrame ? 'good' : 'warn'}`}>{inFrame ? 'Yes' : 'No'}</p>
+      )}
     </div>
   )
 }

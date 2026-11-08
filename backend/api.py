@@ -21,6 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from signup import router as signup_router
 from view_mission_status import router as missions_router
 from login import router as login_router
+from launch import router as launch_router
+from telemetry import router as telemetry_router
+from mission_status import router as mission_status_router
 
 app = FastAPI(title="Hawkeye API")
 
@@ -28,7 +31,15 @@ app = FastAPI(title="Hawkeye API")
 # This is set ONCE here for every route.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    # Allowed sites:
+    #   - any localhost port (Vite moves to 5174, 5175... when 5173 is busy)
+    #   - the live site: https://fly-hawkeye.com and https://www.fly-hawkeye.com
+    #   - Amplify's preview URLs (https://<branch>.<id>.amplifyapp.com)
+    allow_origin_regex=(
+        r"http://(localhost|127\.0\.0\.1):\d+"
+        r"|https://(www\.)?fly-hawkeye\.com"
+        r"|https://[a-z0-9.-]+\.amplifyapp\.com"
+    ),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,6 +47,9 @@ app.add_middleware(
 app.include_router(signup_router)  # POST /signup
 app.include_router(missions_router)  # /missions/...
 app.include_router(login_router)   # POST /login
+app.include_router(mission_status_router)  # GET /missions/{id}/status (Dashboard)
+app.include_router(launch_router)  # POST /missions/{id}/launch, confirm-launch, request-landing
+app.include_router(telemetry_router)  # POST /telemetry, /flight-controller/status (Raspberry Pi)
 
 
 @app.get("/server-status")
