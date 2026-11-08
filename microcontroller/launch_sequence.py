@@ -100,7 +100,10 @@ class TelemetryCache:
         kind = message.get_type()
 
         if kind == "BAD_DATA":
-            return None
+            # Malformed frame was consumed. Return it so callers can
+            # tell this apart from None, which means no message was
+            # available. BAD_DATA must not look like an empty read.
+            return message
 
         now = time.monotonic()
         self.sequence += 1
@@ -422,7 +425,12 @@ def set_guided_mode(connection, cache):
 
 
 def prepare_command(cache):
-    # drain buffered messages before a new command
+    # Drain frames already waiting before this command.
+    # BAD_DATA must not terminate the drain: a malformed frame can
+    # sit ahead of an old ACK, and stopping there would let that ACK
+    # be read later as the response to the new command. None means
+    # the receive had nothing; any other return means keep going,
+    # until this deadline.
     deadline = time.monotonic() + 0.3
 
     while time.monotonic() < deadline:
@@ -722,7 +730,10 @@ def automatic_recovery(connection, cache):
             )
 
         request_attempted = False
-        write_completed = False
+        # Tri-state: True if set_mode returned, None if it raised.
+        # False is not used. An exception does not prove the command
+        # was never transmitted.
+        write_completed = None
 
         try:
             request_attempted = True
@@ -730,11 +741,13 @@ def automatic_recovery(connection, cache):
             write_completed = True
 
         except Exception as error:
+            # A write exception does not establish whether the command
+            # reached ArduPilot, so completion stays unknown.
             return recovery_handoff(
                 "LAND write outcome uncertain: " + str(error),
                 state,
                 request_attempted=request_attempted,
-                write_completed=False,
+                write_completed=None,
                 land_confirmed=False
             )
 
