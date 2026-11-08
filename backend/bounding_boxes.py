@@ -12,17 +12,23 @@ def create_bounding_boxes(detections):
 
     #Note: ids are only starting at 1 this MUST be changed later when we start using persistent IDs via the bytetrack jawny
     for index, detection in enumerate(detections, start=1):
+        x1 = detection["x1"]
+        y1 = detection["y1"]
+        x2 = detection["x2"]
+        y2 = detection["y2"]
         vehicle = {
             "box_id": index,
             "class_id": detection["class_id"],
             "class_name": detection["class_name"],
             "confidence": detection["confidence"],
-            "x1": detection["x1"],
-            "y1": detection["y1"],
-            "x2": detection["x2"],
-            "y2": detection["y2"],
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
             "width": detection["width"],
             "height": detection["height"],
+            "center_x": (x1 + x2) / 2,
+            "center_y": (y1 + y2) / 2,
         }
 
         vehicles.append(vehicle)

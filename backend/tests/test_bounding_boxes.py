@@ -25,3 +25,5 @@ def test_create_bounding_boxes():
     assert vehicles[0]["x2"] == 600
     assert vehicles[0]["width"] == 180
     assert vehicles[0]["height"] == 120
+    assert vehicles[0]["center_x"] == 510
+    assert vehicles[0]["center_y"] == 270
