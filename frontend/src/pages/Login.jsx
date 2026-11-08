@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { signIn } from '../services/auth.js'
 import '../styles/login.css'
-
-const API_BASE_URL = // Use deployed API url or local backend
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8003'
 
 export default function Login() { //define login page
   const navigate = useNavigate()
@@ -37,37 +35,18 @@ export default function Login() { //define login page
 
     setLoading(true) //disable the form while checking
 
-    try { //send login info to fastapi
-      const response = await fetch(`${API_BASE_URL}/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          badge_num: badge.trim(),
-          password,
-        }),
-      })
-
-      const data = await response.json() //convert backend into js data
-
-      if (!response.ok) { //stop when backend rejects login 
-        const detail = data.detail
-
-        if (typeof detail === 'object') { //display lockout info
-          setError(detail.message || 'Login failed.')
-          setAttemptsRemaining(detail.attempts_remaining ?? null)
-          setRetryAfterSeconds(detail.retry_after_seconds ?? 0)
-        } else {
-          setError(detail || 'Invalid badge number or password.')
-        }
-
-        return
-      }
-
+    try {
+      await signIn(badge, password)
       navigate('/deploy')
-    } catch {
-      setError('Unable to reach the server.')
+    } catch (loginError) {
+      const detail = loginError.detail
+      if (typeof detail === 'object') {
+        setError(detail.message || 'Login failed.')
+        setAttemptsRemaining(detail.attempts_remaining ?? null)
+        setRetryAfterSeconds(detail.retry_after_seconds ?? 0)
+      } else {
+        setError(loginError.message || 'Login failed.')
+      }
     } finally { //reenable form after request finishes
       setLoading(false)
     }
