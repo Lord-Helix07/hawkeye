@@ -11,6 +11,7 @@ target_track_id = None
 lost_frames = 0
 MAX_LOST_FRAMES = 60
 target_features = None
+target_box = None
 
 video_path = "backend/videos/vid1.mp4"
 
@@ -77,13 +78,29 @@ def compare_features(target_features, candidate_features):
     )
 
 
-def find_reidentified_vehicle(frame, detections, target_features):
-    """Find the visible vehicle most similar to the lost target."""
+def same_neighborhood(detection, last_box):
+    """True when a car is within a few car-lengths of where the target was last seen."""
+    last_cx = (last_box["x1"] + last_box["x2"]) / 2
+    last_cy = (last_box["y1"] + last_box["y2"]) / 2
+    cx = (detection["x1"] + detection["x2"]) / 2
+    cy = (detection["y1"] + detection["y2"]) / 2
+    reach = max(last_box["width"], last_box["height"]) * 3
+    return np.hypot(cx - last_cx, cy - last_cy) <= reach
+
+
+def find_reidentified_vehicle(frame, detections, target_features, last_box):
+    """Find the nearby vehicle most similar to the lost target."""
+
+    if last_box is None:
+        return None
 
     best_match = None
     best_score = float("inf")
 
     for detection in detections:
+        if not same_neighborhood(detection, last_box):
+            continue
+
         candidate_features = get_vehicle_features(frame, detection)
 
         if candidate_features is None:
@@ -156,6 +173,7 @@ for result in results:
     if target_track_id is None:
         if len(detections) > 0:
             target_track_id = detections[0]["track_id"]
+            target_box = detections[0]
             target_features = get_vehicle_features(frame, detections[0])
             print(f"Target selected: Vehicle ID {target_track_id}")
             status = f"Tracking target ID {target_track_id}"
@@ -165,6 +183,10 @@ for result in results:
     # Check whether the target is visible
     elif target_track_id in visible_ids:
         lost_frames = 0
+        target_box = next(
+            detection for detection in detections
+            if detection["track_id"] == target_track_id
+        )
         status = f"Tracking target ID {target_track_id}"
 
     # Target is missing
@@ -182,11 +204,13 @@ for result in results:
             reidentified_vehicle = find_reidentified_vehicle(
                 frame,
                 detections,
-                target_features
+                target_features,
+                target_box,
             )
 
             if reidentified_vehicle is not None:
                 target_track_id = reidentified_vehicle["track_id"]
+                target_box = reidentified_vehicle
 
                 target_features = get_vehicle_features(frame,reidentified_vehicle)
 
