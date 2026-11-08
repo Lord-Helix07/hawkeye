@@ -126,6 +126,7 @@ class TelemetryCache:
         history_size: int = MESSAGE_HISTORY_SIZE,
         frame_match_window_seconds: float = DEFAULT_FRAME_MATCH_WINDOW_SECONDS,
     ) -> None:
+        """Initialize the cache around one MAVLink connection."""
         self.connection = connection
         self.history_size = max(1, int(history_size))
         self.frame_match_window_ns = int(
@@ -608,6 +609,7 @@ def run_telemetry_publisher(
 
 
 def parse_arguments() -> argparse.Namespace:
+    """Read command-line options for the standalone publisher."""
     parser = argparse.ArgumentParser(description="Shared ArduPilot telemetry publisher")
     parser.add_argument("--connection", default=DEFAULT_CONNECTION)
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUD_RATE)
@@ -618,6 +620,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Start mock mode or the standalone telemetry publisher."""
     args = parse_arguments()
     if args.mock:
         run_mock_mode(args.backend_url, args.interval)
@@ -631,6 +634,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
-
     main()
