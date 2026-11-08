@@ -20,8 +20,9 @@
   display: flex;
   align-items: center;
   gap: 9px;
+  margin-left: -35px; /* sits 30px from the left edge; buttons stay at 65px */
   color: white;
-  font-size: 28px;
+  font-size: 31px;
   font-weight: 500;
 }
 

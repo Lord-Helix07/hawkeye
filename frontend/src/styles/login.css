@@ -10,29 +10,6 @@
   /* 20px more padding at the bottom than the top shifts the content 10px up */
   padding: 24px 24px 44px;
 }
-.auth-brand {
-  position: absolute;
-  top: 24px;
-  left: 30px;
-
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-
-  color: white;
-  font-size: 28px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.auth-brand-icon {
-  width: 32px;
-  height: 32px;
-  display: block;
-  fill: white;
-  filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.5));
-  transform: rotate(45deg);
-}
 /* Only the icon is centered */
 .auth-icon-center {
   display: flex;

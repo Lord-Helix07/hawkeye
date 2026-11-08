@@ -6,7 +6,6 @@ import Register from './pages/Register.jsx'
 import Deploy from './pages/Deploy.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import CameraFeed from './pages/CameraFeed.jsx' // testing: live camera view
-import DashboardFixed from './pages/DashboardFixed.jsx' // teaching copy: fixed pixels
 
 // Temporary dev nav: lets everyone jump to any page while it's being built.
 function DevNav() {
@@ -19,7 +18,6 @@ function DevNav() {
       <button onClick={() => navigate('/register')}>Register</button>
       <button onClick={() => navigate('/deploy')}>Deploy</button>
       <button onClick={() => navigate('/dashboard')}>Dashboard</button>
-      <button onClick={() => navigate('/dashboard-fixed')}>Dashboard (fixed px)</button>
     </nav>
   )
 }
@@ -37,7 +35,6 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/dashboard/:missionId" element={<Dashboard />} />
         <Route path="/camera" element={<CameraFeed />} />
-        <Route path="/dashboard-fixed" element={<DashboardFixed />} />
       </Routes>
     </BrowserRouter>
   )
