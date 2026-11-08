@@ -15,6 +15,8 @@ Adding a new feature (e.g. login):
                        app.include_router(login_router)
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,11 +26,17 @@ from login import router as login_router
 
 app = FastAPI(title="Hawkeye API")
 
+cors_origins = [ #URL for React and FastAPI to communicate with each other
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
 # Allow the React frontend (Vite dev server) to call this API from the browser.
 # This is set ONCE here for every route.
-app.add_middleware(
+app.add_middleware( 
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

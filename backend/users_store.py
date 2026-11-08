@@ -12,15 +12,15 @@ from botocore.exceptions import BotoCoreError, ClientError
 from boto3.dynamodb.types import TypeSerializer
 
 
-class BadgeNumTaken(Exception):
+class BadgeNumTaken(Exception): # raised when a badge number is already taken
     """A user with this badge number already exists."""
 
 
-class EmailTaken(Exception):
+class EmailTaken(Exception): # raised when an email address is already taken
     """A user with this email address already exists."""
 
 
-class LoginLocked(Exception):
+class LoginLocked(Exception): # raised when a user account is temporarily locked
     """A user account is temporarily locked after too many failed logins."""
 
     def __init__(self, retry_after_seconds: int):
@@ -28,19 +28,19 @@ class LoginLocked(Exception):
         super().__init__("Login temporarily locked")
 
 
-class UsersTableSchemaError(Exception):
+class UsersTableSchemaError(Exception): # raised when the Users table schema is incorrect
     """The Users table is not keyed by badge_num."""
 
 
-def users_table_name() -> str:
+def users_table_name() -> str: # get the name of the Users table
     return os.getenv("USERS_TABLE", "Users")
 
 
-def users_email_index_table_name() -> str:
+def users_email_index_table_name() -> str: # get the name of the email index table
     return os.getenv("USERS_EMAIL_INDEX_TABLE", "UsersByEmail") 
 
 
-def _dynamodb_kwargs() -> dict:
+def _dynamodb_kwargs() -> dict: # allows boto3 to connect to DynamoDB with the correct settings
     """Build shared connection settings for DynamoDB resource and client."""
     region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
     kwargs = {
@@ -62,7 +62,7 @@ def get_dynamodb_resource(): # connect to DynamoDB
     return boto3.resource("dynamodb", **_dynamodb_kwargs())
 
 
-def get_dynamodb_client():
+def get_dynamodb_client(): # connect to DynamoDB using the low-level client
     """Return a low-level DynamoDB client for typed transaction requests."""
     return boto3.client("dynamodb", **_dynamodb_kwargs())
 
@@ -106,13 +106,13 @@ def _ensure_keyed_table(dynamodb, table_name: str, key_name: str): # ensure the 
     return dynamodb.Table(table_name)
 
 
-def ensure_users_table(dynamodb=None):
+def ensure_users_table(dynamodb=None): #make sure the Users table is set up correctly
     """Create or validate the Users table keyed by badge_num."""
     dynamodb = dynamodb or get_dynamodb_resource()
     return _ensure_keyed_table(dynamodb, users_table_name(), "badge_num")
 
 
-def ensure_email_index_table(dynamodb=None):
+def ensure_email_index_table(dynamodb=None): #make sure the email index table is set up correctly
     """Create or validate the table that reserves each email exactly once."""
     dynamodb = dynamodb or get_dynamodb_resource()
     return _ensure_keyed_table(dynamodb, users_email_index_table_name(), "email")
@@ -121,7 +121,7 @@ def ensure_email_index_table(dynamodb=None):
 _serializer = TypeSerializer()
 
 
-def _encode_item(item: dict) -> dict:
+def _encode_item(item: dict) -> dict: # convert Python to DynamoDB format
     """Convert normal Python values to low-level DynamoDB AttributeValues."""
     return {key: _serializer.serialize(value) for key, value in item.items()}
 
@@ -188,7 +188,7 @@ def _utc_now() -> str: # get the current UTC time as a string
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def get_user(badge_num: str, dynamodb=None): 
+def get_user(badge_num: str, dynamodb=None): # retrieve a user by badge number from the Users table
     """Return one user by badge number, or None when no user exists."""
     dynamodb = dynamodb or get_dynamodb_resource()
     table = ensure_users_table(dynamodb)
@@ -198,7 +198,7 @@ def get_user(badge_num: str, dynamodb=None):
     ).get("Item")
 
 
-def clear_expired_login_lock(badge_num: str, dynamodb=None) -> None: # Clear a lock that has already expired and reset failed attempts
+def clear_expired_login_lock(badge_num: str, dynamodb=None) -> None: # Clear a lock that has already expired
     """Clear a lock that has already expired and reset failed attempts."""
     dynamodb = dynamodb or get_dynamodb_resource()
     table = ensure_users_table(dynamodb)
@@ -215,7 +215,6 @@ def clear_expired_login_lock(badge_num: str, dynamodb=None) -> None: # Clear a l
         )
     except table.meta.client.exceptions.ConditionalCheckFailedException:
         pass
-
 
 def record_failed_login( # Record a failed login attempt and lock the account if necessary
     badge_num: str,
@@ -278,7 +277,7 @@ def record_failed_login( # Record a failed login attempt and lock the account if
     }
 
 
-def reset_login_attempts(badge_num: str, dynamodb=None) -> None:
+def reset_login_attempts(badge_num: str, dynamodb=None) -> None: #reset failed login attempts and clear any lock
     """Clear failed-login state after a successful login."""
     dynamodb = dynamodb or get_dynamodb_resource()
     table = ensure_users_table(dynamodb)
