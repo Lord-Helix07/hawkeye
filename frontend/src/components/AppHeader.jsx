@@ -1,6 +1,6 @@
 // Top bar for the logged-in pages (Deploy, Dashboard):
 //   [◆ Hawkeye]   Dashboard  Deploy            {page extras}  Badge 1234 ▾
-// The logo goes to the landing page; the badge menu has Log out.
+// The logo goes to the landing page; the badge menu has Log out (back to the landing page).
 // Anything passed as children (e.g. the Live feed button) sits before the badge menu.
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -32,7 +32,7 @@ export default function AppHeader({ children }) {
 
   function logOut() {
     clearSession()
-    navigate('/login', { replace: true })
+    navigate('/', { replace: true })
   }
 
   return (
