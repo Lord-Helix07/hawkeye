@@ -6,6 +6,21 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SES_SENDER_EMAIL=noreply@fly-hawkeye.com",
+        "FRONTEND_URL=http://localhost:5173",
+        ".venv/bin/uvicorn",
+        "--app-dir", "backend",
+        "--reload", "--reload-dir", "backend",
+        "api:app",
+        "--port", "8000"
+      ],
+      "port": 8000,
+      "autoPort": false
     }
   ]
 }

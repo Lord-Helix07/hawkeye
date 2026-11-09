@@ -164,8 +164,9 @@
   background-color: #FF79C6;
 }
 
-/* Log in / Register buttons are as wide as the input boxes */
+/* Log in / Register / Reset buttons are as wide as the input boxes */
 .login-page .auth-submit,
-.register-page .auth-submit {
+.register-page .auth-submit,
+.forgot-page .auth-submit {
   width: 340px;
 }
