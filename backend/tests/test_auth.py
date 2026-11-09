@@ -41,7 +41,15 @@ def client(monkeypatch):
         yield test_client
 
 
-def signup(client, badge="1234", email="officer@example.com", password="hunter22"):
+def approve(badge="1234"):
+    from users_store import add_approved_badge
+
+    add_approved_badge(badge)
+
+
+def signup(client, badge="1234", email="officer@example.com", password="hunter22", approved=True):
+    if approved:
+        approve(badge)
     return client.post(
         "/signup",
         json={"badge_num": badge, "email": email, "confirm_email": email, "password": password},
@@ -204,3 +212,79 @@ def test_reset_password_rejects_short_password(client):
     # the token wasn't used up by the rejected attempt
     ok = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "newpass1"})
     assert ok.status_code == 200
+
+
+NOT_APPROVED = "isn't valid"
+
+
+def test_signup_needs_an_approved_badge(client):
+    response = signup(client, approved=False)
+    assert response.status_code == 403
+    assert NOT_APPROVED in response.json()["detail"]
+    assert login(client).status_code == 401  # no account was made
+
+
+def test_approved_badge_works_with_any_email(client):
+    approve("1234")
+    assert signup(client, email="anyone@gmail.com", approved=False).status_code == 201
+    assert login(client).status_code == 200
+    # still only one account per badge
+    assert signup(client, email="other@gmail.com", approved=False).status_code == 409
+
+
+def test_removed_badge_can_no_longer_log_in(client):
+    from users_store import remove_approved_badge
+
+    signup(client)
+    assert login(client).status_code == 200
+    assert remove_approved_badge("1234") is True
+    assert login(client).status_code == 401
+    assert remove_approved_badge("1234") is False
+
+
+def test_approved_badge_is_marked_claimed(client):
+    from users_store import get_approved_badge
+
+    signup(client)
+    assert get_approved_badge("1234").get("claimed_at")
+
+
+def test_manage_badges_script(client, capsys):
+    import manage_badges
+
+    assert manage_badges.main(["add", "5555", "6666"]) == 0
+    signup(client, badge="6666", approved=False)
+    assert manage_badges.main(["list"]) == 0
+    out = capsys.readouterr().out
+    assert "5555         not registered yet" in out
+    assert "6666         registered" in out
+
+    assert manage_badges.main(["remove", "5555"]) == 0
+    assert manage_badges.main(["remove", "5555"]) == 1
+
+
+def test_approve_existing_keeps_current_accounts_working(client):
+    import manage_badges
+    from users_store import remove_approved_badge
+
+    signup(client)
+    remove_approved_badge("1234")  # like an account made before the approved list existed
+    assert login(client).status_code == 401
+    assert manage_badges.main(["approve-existing"]) == 0
+    assert login(client).status_code == 200
+
+
+def test_generate_badges(client, tmp_path, capsys):
+    import manage_badges
+    from users_store import list_approved_badges
+
+    out_file = tmp_path / "badges.txt"
+    assert manage_badges.main(["generate", "25", "--out", str(out_file)]) == 0
+    badges = out_file.read_text().split()
+    assert len(badges) == len(set(badges)) == 25
+    assert all(len(badge) == 8 and badge.isdigit() for badge in badges)
+    assert {item["badge_num"] for item in list_approved_badges()} == set(badges)
+    assert capsys.readouterr().out.split() == badges  # printed too
+
+    # a generated badge can register with any email
+    assert signup(client, badge=badges[0], email="new.officer@gmail.com", approved=False).status_code == 201

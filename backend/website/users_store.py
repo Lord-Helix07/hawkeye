@@ -28,6 +28,10 @@ class LoginLocked(Exception):
         super().__init__("Login temporarily locked")
 
 
+class BadgeNotApproved(Exception):
+    """The badge number isn't on the approved list."""
+
+
 class UsersTableSchemaError(Exception):
     """The Users table is not keyed by badge_num."""
 
@@ -38,6 +42,10 @@ def users_table_name() -> str:
 
 def users_email_index_table_name() -> str:
     return os.getenv("USERS_EMAIL_INDEX_TABLE", "UsersByEmail") 
+
+
+def approved_badges_table_name() -> str:
+    return os.getenv("APPROVED_BADGES_TABLE", "ApprovedBadges")
 
 
 def _dynamodb_kwargs() -> dict:
@@ -118,6 +126,74 @@ def ensure_email_index_table(dynamodb=None):
     return _ensure_keyed_table(dynamodb, users_email_index_table_name(), "email")
 
 
+def ensure_approved_badges_table(dynamodb=None):
+    """Create or validate the list of badge numbers allowed to register."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    return _ensure_keyed_table(dynamodb, approved_badges_table_name(), "badge_num")
+
+
+# ---------- approved badge list (managed with manage_badges.py) ----------
+# Each row: badge_num, added_at, and claimed_at once someone has registered it.
+# Any email may register an approved badge.
+
+def get_approved_badge(badge_num: str, dynamodb=None):
+    """Return the approved-list entry for a badge, or None if it isn't approved."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_approved_badges_table(dynamodb)
+    return table.get_item(Key={"badge_num": badge_num.strip()}, ConsistentRead=True).get("Item")
+
+
+def is_badge_approved(badge_num: str, dynamodb=None) -> bool:
+    return get_approved_badge(badge_num, dynamodb) is not None
+
+
+def add_approved_badge(badge_num: str, dynamodb=None) -> None:
+    """Put a badge on the approved list (no change if it's already there)."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_approved_badges_table(dynamodb)
+    badge_num = badge_num.strip()
+    if not badge_num:
+        raise ValueError("Badge number is required")
+    table.update_item(
+        Key={"badge_num": badge_num},
+        UpdateExpression="SET added_at = if_not_exists(added_at, :now)",
+        ExpressionAttributeValues={":now": _utc_now()},
+    )
+
+
+def remove_approved_badge(badge_num: str, dynamodb=None) -> bool:
+    """Take a badge off the list. Returns False if it wasn't on it."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_approved_badges_table(dynamodb)
+    result = table.delete_item(Key={"badge_num": badge_num.strip()}, ReturnValues="ALL_OLD")
+    return "Attributes" in result
+
+
+def list_approved_badges(dynamodb=None) -> list[dict]:
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_approved_badges_table(dynamodb)
+    items, kwargs = [], {}
+    while True:
+        page = table.scan(**kwargs)
+        items.extend(page.get("Items", []))
+        if "LastEvaluatedKey" not in page:
+            return sorted(items, key=lambda item: item["badge_num"])
+        kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+
+def list_users(dynamodb=None) -> list[dict]:
+    """Every user's badge_num, email and status (no password hashes)."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    items, kwargs = [], {"ProjectionExpression": "badge_num, email, #s", "ExpressionAttributeNames": {"#s": "status"}}
+    while True:
+        page = table.scan(**kwargs)
+        items.extend(page.get("Items", []))
+        if "LastEvaluatedKey" not in page:
+            return sorted(items, key=lambda item: item["badge_num"])
+        kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+
 _serializer = TypeSerializer()
 
 
@@ -134,13 +210,20 @@ def create_user( # create a new user and reserve its email
 ) -> None:
     """Insert a user and reserve its email atomically.
 
-    Fails if either the badge number or normalized email is already registered.
+    Fails if either the badge number or normalized email is already registered,
+    or if the badge isn't on the approved list.
     """
     badge_num = badge_num.strip()
     email = email.strip().lower()
     dynamodb = dynamodb or get_dynamodb_resource()
     ensure_users_table(dynamodb)
     ensure_email_index_table(dynamodb)
+    ensure_approved_badges_table(dynamodb)
+
+    # Friendly check first; the transaction below re-checks it atomically.
+    if not is_badge_approved(badge_num, dynamodb):
+        raise BadgeNotApproved
+
     client = get_dynamodb_client()
     table_name = users_table_name()
     email_index_table_name = users_email_index_table_name()
@@ -172,6 +255,16 @@ def create_user( # create a new user and reserve its email
                         "ConditionExpression": "attribute_not_exists(email)",
                     }
                 },
+                {
+                    # badge must still be on the approved list
+                    "Update": {
+                        "TableName": approved_badges_table_name(),
+                        "Key": _encode_item({"badge_num": badge_num}),
+                        "UpdateExpression": "SET claimed_at = :now",
+                        "ConditionExpression": "attribute_exists(badge_num)",
+                        "ExpressionAttributeValues": _encode_item({":now": created_at}),
+                    }
+                },
             ]
         )
     except client.exceptions.TransactionCanceledException as error: 
@@ -180,6 +273,8 @@ def create_user( # create a new user and reserve its email
             raise BadgeNumTaken from error
         if len(reasons) > 1 and reasons[1].get("Code") == "ConditionalCheckFailed":
             raise EmailTaken from error
+        if len(reasons) > 2 and reasons[2].get("Code") == "ConditionalCheckFailed":
+            raise BadgeNotApproved from error
         raise
 
 
@@ -367,10 +462,11 @@ def main() -> int: # main function to ensure tables exist and print status
     try:
         table = ensure_users_table()
         email_index = ensure_email_index_table()
+        approved = ensure_approved_badges_table()
     except (BotoCoreError, ClientError, UsersTableSchemaError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    print(f"Users tables ready: {table.name}, {email_index.name}")
+    print(f"Users tables ready: {table.name}, {email_index.name}, {approved.name}")
     return 0
 
 

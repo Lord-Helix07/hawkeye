@@ -12,6 +12,7 @@ from users_store import (
     UsersTableSchemaError,
     clear_expired_login_lock,
     get_user,
+    is_badge_approved,
     record_failed_login,
     reset_login_attempts,
 )
@@ -37,6 +38,8 @@ def login(request: LoginRequest):
         user = get_user(badge_num) # Retrieve the user by badge number
 
         if user is None or user.get("status") != "active": # Check if user exists and is active
+            raise HTTPException(status_code=401, detail=generic_error)
+        if not is_badge_approved(badge_num): # taken off the approved list: no more logins
             raise HTTPException(status_code=401, detail=generic_error)
 
         now = int(time.time()) 

@@ -6,7 +6,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from passwords import check_password
-from users_store import BadgeNumTaken, EmailTaken, UsersTableSchemaError, create_user
+from users_store import BadgeNotApproved, BadgeNumTaken, EmailTaken, UsersTableSchemaError, create_user
 
 # The sign-up routes. They're plugged into the one backend app in api.py
 # (start it with: uvicorn api:app --reload --port 8000).
@@ -53,6 +53,8 @@ def signup(request: SignUpRequest): #frontend handler for sign-up
             password_hash=password_hash,
             email=email,
         )
+    except BadgeNotApproved:
+        raise HTTPException(status_code=403, detail="This badge number isn't valid.")
     except BadgeNumTaken:
         raise HTTPException(status_code=409, detail="Badge number already registered")
     except EmailTaken:

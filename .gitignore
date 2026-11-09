@@ -8,3 +8,5 @@ npm-debug.log*
 .venv/
 __pycache__/
 *.pyc
+# generated badge numbers (manage_badges.py generate --out)
+approved_badges*.txt
