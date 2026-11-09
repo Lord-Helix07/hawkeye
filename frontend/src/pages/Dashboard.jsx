@@ -18,8 +18,9 @@ import { formatTime } from '../components/dashboard/format.js'
 export default function Dashboard() {
   // no number in the URL: use the last mission started on this computer (or 0001)
   const { missionId = getLastMissionId() ?? '0001' } = useParams()
-  const { status, error, refresh } = useMissionStatus(missionId)
-  const telemetry = status?.telemetry ?? {} // empty until the drone sends data
+  const { status: liveStatus, error, refresh } = useMissionStatus(missionId)
+  const status = liveStatus ?? {} // empty until the server answers
+  const telemetry = status.telemetry ?? {} // empty until the drone sends data
   // set by the Deploy page when the automatic launch request didn't go through
   const launchError = useLocation().state?.launchError
 
@@ -28,7 +29,7 @@ export default function Dashboard() {
       <header className="dashboard-header">
         <h1 className="flight-status-title">Flight Status</h1>
         <div className="dashboard-header-right">
-          <LaunchControls missionId={missionId} status={status} onChange={refresh} />
+          <LaunchControls missionId={missionId} status={liveStatus} onChange={refresh} />
           <span className="mission-label">Mission: {missionId}</span>
         </div>
       </header>
@@ -49,10 +50,9 @@ export default function Dashboard() {
         </p>
       )}
 
-      {/* nothing has arrived yet */}
-      {!status ? (
-        <p className="dashboard-message">Loading mission…</p>
-      ) : (
+      {/* always show every card; each one shows "—" until its data arrives */}
+      {!liveStatus && !error && <p className="dashboard-message">Loading mission…</p>}
+      {(
         <main className="dashboard-grid">
           {/* ---------- left column ---------- */}
           <section className="left-column">

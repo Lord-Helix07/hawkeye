@@ -152,3 +152,8 @@
 .forgot-page .auth-switch button {
   color: #BD93F9;
 }
+
+/* "Reset" button on the forgot password page: neon purple */
+.forgot-page .auth-submit {
+  background-color: #BD93F9;
+}

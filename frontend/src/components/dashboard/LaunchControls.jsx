@@ -4,7 +4,8 @@
 //   nothing yet, not_ready, failed  -> "Launch drone"
 //   requested                        -> waiting for the drone's checks
 //   ready                            -> "Confirm takeoff"
-//   confirmed, launched              -> "Request landing"
+// "Land drone" is always shown and clickable (POST /missions/{id}/request-landing);
+// the backend only accepts it once launch_status is confirmed/launched.
 //   landing requested                -> waiting for the drone
 import { useState } from 'react'
 import { confirmLaunch, launchMission, requestLanding } from '../../services/launch.js'
@@ -31,9 +32,7 @@ export function LaunchControls({ missionId, status, onChange }) {
 
   const launch = status?.launch_status ?? null
   const landing = status?.landing_status ?? null
-  const flying = launch === 'confirmed' || launch === 'launched'
   const canLaunch = status && (!launch || launch === 'not_ready' || launch === 'failed')
-  const canLand = flying && (!landing || landing === 'failed')
 
   async function run(action) {
     setBusy(true)
@@ -71,11 +70,10 @@ export function LaunchControls({ missionId, status, onChange }) {
             Confirm takeoff
           </button>
         )}
-        {canLand && (
-          <button className="land-btn" onClick={handleLanding} disabled={busy}>
-            Request landing
-          </button>
-        )}
+        {/* always shown and clickable; the backend says why if it can't land right now */}
+        <button className="land-btn" onClick={handleLanding} disabled={busy}>
+          Land Drone
+        </button>
       </div>
 
       {reasons.filter(Boolean).length > 0 && (
