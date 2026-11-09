@@ -20,9 +20,9 @@ try:
         ground_distance_m,
     )
 except ImportError:
-    from backend.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
-    from backend.byte_track import TrackState, follow_target, reset_tracker, track_vehicles
-    from backend.drone_distance import (
+    from backend.drone.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
+    from backend.drone.byte_track import TrackState, follow_target, reset_tracker, track_vehicles
+    from backend.drone.drone_distance import (
         PI_CAMERA_3_6MM,
         STAND_IN_TELEMETRY,
         distance_from_car_center,

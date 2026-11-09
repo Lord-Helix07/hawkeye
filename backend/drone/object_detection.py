@@ -9,8 +9,8 @@ import cv2
 from ultralytics import YOLO
 
 
-#  Load the YOLO11 model
-model = YOLO("yolo11n.pt")
+#  Load the YOLO11 model that sits next to this file.
+model = YOLO(str(Path(__file__).with_name("yolo11n.pt")))
 print("YOLO11 model loaded successfully")
 
 

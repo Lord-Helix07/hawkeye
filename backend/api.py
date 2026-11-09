@@ -9,14 +9,25 @@ Start it (from the backend folder):
 
 Then open http://localhost:8000/docs to see and try every route.
 
+Website routes live in website/. Drone routes live in drone/.
 Adding a new feature (e.g. login):
     1. In your file:   router = APIRouter()   and   @router.post("/login")
     2. Here:           from login import router as login_router
                        app.include_router(login_router)
 """
 
+import sys
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# website/ and drone/ keep flat imports (from login import ..., from launch import ...).
+_BACKEND_DIR = Path(__file__).resolve().parent
+for _group in ("website", "drone"):
+    _folder = str(_BACKEND_DIR / _group)
+    if _folder not in sys.path:
+        sys.path.insert(0, _folder)
 
 from signup import router as signup_router
 from view_mission_status import router as missions_router

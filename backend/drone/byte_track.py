@@ -7,8 +7,8 @@ try:
     from bounding_boxes import create_bounding_boxes, draw_bounding_boxes
     from object_detection import detections_from_result, model
 except ImportError:
-    from backend.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
-    from backend.object_detection import detections_from_result, model
+    from backend.drone.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
+    from backend.drone.object_detection import detections_from_result, model
 
 MAX_LOST_FRAMES = 60
 TRACKER_CONFIG = str(Path(__file__).parent / "bytetrack_custom.yaml")

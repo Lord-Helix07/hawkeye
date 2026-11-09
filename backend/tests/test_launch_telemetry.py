@@ -7,7 +7,10 @@ from decimal import Decimal
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_BACKEND = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, _BACKEND)
+sys.path.insert(0, os.path.join(_BACKEND, "website"))
+sys.path.insert(0, os.path.join(_BACKEND, "drone"))
 
 moto = pytest.importorskip("moto")
 

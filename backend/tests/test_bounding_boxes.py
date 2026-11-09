@@ -1,4 +1,4 @@
-from backend.bounding_boxes import create_bounding_boxes
+from backend.drone.bounding_boxes import create_bounding_boxes
 
 
 def test_create_bounding_boxes():
