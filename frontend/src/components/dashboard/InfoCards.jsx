@@ -3,8 +3,9 @@ import { formatCoordinates, formatTime } from './format.js'
 
 const LOG_ROWS = 12 // rows the log shows; empty ones fill the space
 
-export function EvidenceCard({ images, lastSeen, trackingStatus, targetInFrame }) {
+export function EvidenceCard({ images = [], lastSeen, trackingStatus, targetInFrame }) {
   const active = trackingStatus === 'active'
+  const trackingText = trackingStatus == null ? '—' : active ? 'Active' : 'Searching'
 
   return (
     <div className="card">
@@ -30,7 +31,7 @@ export function EvidenceCard({ images, lastSeen, trackingStatus, targetInFrame }
         </div>
         <div className="detail-row">
           <span className="detail-label">TRACKING STATUS</span>
-          <span className={active ? 'good' : 'warn'}>{active ? 'Active' : 'Searching'}</span>
+          <span className={trackingStatus == null ? '' : active ? 'good' : 'warn'}>{trackingText}</span>
         </div>
       </div>
     </div>
@@ -55,7 +56,7 @@ export function GpsCard({ latitude, longitude, location }) {
   )
 }
 
-export function FlightLog({ entries }) {
+export function FlightLog({ entries = [] }) {
   const emptyRows = Math.max(0, LOG_ROWS - entries.length)
 
   return (

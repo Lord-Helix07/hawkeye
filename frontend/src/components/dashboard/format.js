@@ -8,6 +8,7 @@ export function formatTime(isoString) {
 
 // 37.3352, -121.8811 -> "37.3352° N · 121.8811° W"
 export function formatCoordinates(latitude, longitude) {
+  if (latitude == null || longitude == null) return '—'
   const ns = latitude >= 0 ? 'N' : 'S'
   const ew = longitude >= 0 ? 'E' : 'W'
   return `${Math.abs(latitude).toFixed(4)}° ${ns} · ${Math.abs(longitude).toFixed(4)}° ${ew}`

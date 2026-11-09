@@ -1,100 +1,102 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { signIn } from '../services/auth.js'
+//login page
+import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
+import { logIn, friendlyError } from '../services/auth.js'
+import { safeNextPath, saveSession } from '../services/session.js'
 import '../styles/login.css'
 
-export default function Login() { //define login page
+export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams() // ?next=/dashboard/0001 when sent here by RequireLogin
+  useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [attemptsRemaining, setAttemptsRemaining] = useState(null)
-  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0)
-  const [loading, setLoading] = useState(false)
-//Store login inputs, errors, remaining attempts, lockout time, and loading state.
-  useEffect(() => { //decrease the lockout timer every second and reset after done
-    if (retryAfterSeconds <= 0) return
+  const [submitting, setSubmitting] = useState(false)
 
-    const timer = setInterval(() => {
-      setRetryAfterSeconds((seconds) => Math.max(0, seconds - 1))
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [retryAfterSeconds])
-
-  async function handleLogin(e) { //submit login data
+  // pressing Enter in any box submits the form
+  async function handleLogin(e) {
     e.preventDefault()
-
-    setError('') //clear stuff from previous login
-    setAttemptsRemaining(null)
-
-    if (!badge.trim() || !password) { //validate both fields
+    if (!badge.trim() || !password) {
       setError('Enter your badge number and password.')
       return
     }
-
-    setLoading(true) //disable the form while checking
-
+    setError('')
+    setSubmitting(true)
     try {
-      await signIn(badge, password)
-      navigate('/deploy')
-    } catch (loginError) {
-      const detail = loginError.detail
-      if (typeof detail === 'object') {
-        setError(detail.message || 'Login failed.')
-        setAttemptsRemaining(detail.attempts_remaining ?? null)
-        setRetryAfterSeconds(detail.retry_after_seconds ?? 0)
-      } else {
-        setError(loginError.message || 'Login failed.')
-      }
-    } finally { //reenable form after request finishes
-      setLoading(false)
+      const result = await logIn(badge, password) // checks the account in DynamoDB
+      saveSession(result.badge_num ?? badge.trim(), result.token)
+      // back to the page that sent us here (e.g. /dashboard/0001), otherwise Deploy
+      navigate(safeNextPath(searchParams.get('next')) ?? '/deploy', { replace: true })
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  const locked = retryAfterSeconds > 0 //determine if account is locked
+  return (
+    <main className="auth-page">
 
-  return ( //connect form submission to the login handler.
-    <main className="auth-page"> 
+  {/* Icon is centered above the login title */}
+  <div className="auth-icon-center">
+  <svg
+    className="hawkeye-icon"
+    viewBox="0 0 100 100"
+    aria-hidden="true"
+   >
+    <path
+      d="
+    M50 6
+    C54 25 62 38 94 50
+    C75 54 63 62 50 94
+    C46 75 38 62 6 50
+    C25 46 38 38 50 6
+    Z
+  "
+    />
+  </svg>
+</div>
       <h1 className="auth-title">Log in to Hawkeye</h1>
 
-      <form className="auth-form" onSubmit={handleLogin}>  
+      <form className="auth-form" onSubmit={handleLogin}>
         <input
           className="auth-input"
           placeholder="Badge Number..."
           value={badge}
           onChange={(e) => setBadge(e.target.value)}
-          disabled={loading || locked}
         />
-
         <input
           className="auth-input"
           type="password"
+          autoComplete="current-password"
           placeholder="Password..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          disabled={loading || locked}
         />
-
-        <button type="submit" disabled={loading || locked}>
-          {loading ? 'Logging in...' : 'Log in'}
-        </button>
+        {/* hidden button so Enter submits the form */}
+        <button type="submit" hidden disabled={submitting} />
       </form>
 
-      {error && <p role="alert">{error}</p>}  
-
-      {attemptsRemaining !== null && (
-        <p>{attemptsRemaining} attempts remaining.</p>
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
       )}
-
-      {locked && <p>Try again in {retryAfterSeconds} seconds.</p>}
 
       <p className="auth-switch">
         Don’t have an account?{' '}
-        <button onClick={() => navigate('/register')}>
-          Register now.
-        </button>
+        <button onClick={() => navigate('/register', { replace: true, state: LANDING_BEHIND })}>Register now.</button>
       </p>
+
+      <button
+        type="button"
+        className="auth-forgot"
+        onClick={() => navigate('/forgot-password', { replace: true, state: LANDING_BEHIND })}
+      >
+        Forgot your password?
+      </button>
     </main>
   )
 }

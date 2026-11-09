@@ -52,6 +52,87 @@ def get_mission_id(event):
     return ""
 
 
+# launch_status values on the Missions row. The Raspberry Pi
+# (microcontroller/launch_sequence.py) uses the same words:
+#   website sets  requested -> Pi sets ready / not_ready
+#   operator sets confirmed -> Pi sets launched / failed
+LAUNCH_REQUESTED = "requested"
+LAUNCH_READY = "ready"
+LAUNCH_CONFIRMED = "confirmed"
+# a new request is only allowed when there is no launch yet, or the last one didn't work
+RETRYABLE_LAUNCH_STATUSES = ("not_ready", "failed")
+CLOSED_MISSION_STATUSES = {"completed", "aborted", "failed"}
+
+
+class LaunchRejected(Exception):
+    """The launch request was refused. status_code says why (404 or 409)."""
+
+    def __init__(self, status_code, message):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def request_launch(mission_id, table=None):
+    """Set launch_status = requested on the mission and return the updated row.
+
+    Used by POST /missions/{mission_id}/launch (launch.py) and by the Lambda below.
+    Raises LaunchRejected when the mission can't launch, ClientError for DynamoDB problems.
+    """
+    table = table or boto3.resource("dynamodb").Table(TABLE_NAME)
+
+    # Look up the mission that the user wants to launch.
+    mission = table.get_item(Key={"mission_id": mission_id}).get("Item")
+    if mission is None:
+        raise LaunchRejected(404, f"Mission '{mission_id}' was not found")
+
+    # A mission needs a drone assigned before it can launch (AssignDrone.py sets drone_id).
+    drone_id = mission.get("drone_id")
+    if not drone_id:
+        raise LaunchRejected(409, "Launch rejected: no drone is assigned")
+
+    # Only check readiness if the sample mission includes a readiness field.
+    readiness = mission.get("drone_status", mission.get("drone_readiness"))
+    if readiness is not None and str(readiness).upper() not in {"READY", "IDLE", "ASSIGNED"}:
+        raise LaunchRejected(409, f"Launch rejected: drone '{drone_id}' is not ready")
+
+    if str(mission.get("status", "")).lower() in CLOSED_MISSION_STATUSES:
+        raise LaunchRejected(409, f"Launch rejected: mission status is '{mission.get('status')}'")
+
+    launch_status = mission.get("launch_status")
+    if launch_status and launch_status not in RETRYABLE_LAUNCH_STATUSES:
+        raise LaunchRejected(409, f"Launch rejected: launch is already '{launch_status}'")
+
+    # The condition stops two clicks (or two officers) from both requesting a launch.
+    try:
+        updated = table.update_item(
+            Key={"mission_id": mission_id},
+            UpdateExpression=(
+                "SET launch_status = :requested, launch_request_timestamp = :timestamp "
+                "REMOVE launch_reason, launch_reasons"
+            ),
+            ConditionExpression=(
+                "attribute_not_exists(launch_status) OR launch_status IN (:not_ready, :failed)"
+            ),
+            ExpressionAttributeValues={
+                ":requested": LAUNCH_REQUESTED,
+                ":timestamp": utc_now(),
+                ":not_ready": RETRYABLE_LAUNCH_STATUSES[0],
+                ":failed": RETRYABLE_LAUNCH_STATUSES[1],
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as error:
+        if error.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            raise LaunchRejected(409, "Launch rejected: request already exists") from error
+        raise
+
+    return updated["Attributes"]
+
+
 # This is the AWS Lambda function that handles the Launch Drone request.
 def lambda_handler(event, context):
     # This handles the browser's preflight request before the real POST request.
@@ -63,56 +144,19 @@ def lambda_handler(event, context):
     if not mission_id:
         return make_response(400, {"error": "Mission ID is required"})
 
-    # Lambda uses its AWS permissions to access the Missions table.
-    table = boto3.resource("dynamodb").Table(TABLE_NAME)
-
     try:
-        # Look up the mission that the user wants to launch.
-        mission = table.get_item(Key={"mission_id": mission_id}).get("Item")
-        if mission is None:
-            return make_response(404, {"error": f"Mission '{mission_id}' was not found"})
-
-        # A mission needs a drone assigned before it can launch.
-        drone_id = mission.get("assigned_drone_id")
-        if not drone_id:
-            return make_response(409, {"error": "Launch rejected: no drone is assigned"})
-
-        # Only check readiness if the sample mission includes a readiness field.
-        readiness = mission.get("drone_status", mission.get("drone_readiness"))
-        if readiness is not None and str(readiness).upper() not in {"READY", "IDLE", "ASSIGNED"}:
-            return make_response(409, {"error": f"Launch rejected: drone '{drone_id}' is not ready"})
-
-        # Do not launch a mission that already started or already has a request.
-        status = str(mission.get("status", "")).lower()
-        if status == "launch_requested" or mission.get("launch_request_timestamp"):
-            return make_response(409, {"error": "Launch rejected: request already exists"})
-        if status in {"active", "completed", "aborted", "failed"}:
-            return make_response(409, {"error": f"Launch rejected: mission status is '{mission.get('status')}'"})
-
-        # Save the request time in UTC so every service uses the same time zone.
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-        # Update the status and timestamp in one database operation.
-        # The condition stops duplicate requests from updating the same mission.
-        updated = table.update_item(
-            Key={"mission_id": mission_id},
-            UpdateExpression="SET #status = :requested, launch_request_timestamp = :timestamp",
-            ConditionExpression="attribute_not_exists(launch_request_timestamp) AND (attribute_not_exists(#status) OR #status <> :requested)",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={":requested": "launch_requested", ":timestamp": timestamp},
-            ReturnValues="ALL_NEW",
-        )
+        mission = request_launch(mission_id)
+    except LaunchRejected as error:
+        return make_response(error.status_code, {"error": str(error)})
     except ClientError as error:
         # This catches DynamoDB errors and gives the caller a readable message.
         error_code = error.response.get("Error", {}).get("Code", "unknown")
-        if error_code == "ConditionalCheckFailedException":
-            return make_response(409, {"error": "Launch rejected: request already exists"})
         return make_response(500, {"error": f"DynamoDB error: {error_code}"})
 
     # Return the updated Missions row after the launch request succeeds.
     return make_response(200, {
         "message": "Launch request submitted; awaiting manual takeoff confirmation",
-        "mission": updated["Attributes"],
+        "mission": mission,
     })
 
 

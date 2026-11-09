@@ -2,7 +2,7 @@
 //
 // The backend hands out the numbers from one shared counter in DynamoDB
 // (backend/mission_numbers.py), so every officer's computer sees the same count.
-import { API_URL } from './api.js'
+import { apiFetch } from './api.js'
 
 const LAST_MISSION_KEY = 'hawkeye_last_mission_id'
 
@@ -15,7 +15,7 @@ export function formatMissionNumber(number) {
 // A preview for the Deploy page. If someone else deploys first, the real
 // number (from createMission) will be higher.
 export async function fetchNextMissionId() {
-  const response = await fetch(`${API_URL}/missions/next-number`)
+  const response = await apiFetch('/missions/next-number')
   if (!response.ok) {
     throw new Error(`Request failed (${response.status})`)
   }
@@ -24,8 +24,10 @@ export async function fetchNextMissionId() {
 }
 
 // POST /missions -> the saved mission, e.g. { mission_id: "0003", status: "pending", ... }
-export async function createMission(form) {
-  const response = await fetch(`${API_URL}/missions`, {
+// location ({ latitude, longitude } or null) is where the drone should fly to;
+// the backend uses it to pick the nearest drone.
+export async function createMission(form, location = null) {
+  const response = await apiFetch('/missions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -33,6 +35,8 @@ export async function createMission(form) {
       model: form.model.trim(),
       color: form.color.trim(),
       license_plate: form.plate.trim(), // the form calls it "plate", the backend "license_plate"
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
     }),
   })
   if (response.status === 422) {

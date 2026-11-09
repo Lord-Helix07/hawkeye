@@ -3,6 +3,20 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/deploy.css'
 import { createMission, fetchNextMissionId } from '../services/missionNumbers.js'
+import { launchMission } from '../services/launch.js'
+
+// The officer's position, so the backend can send the nearest drone.
+// Resolves to null if the browser can't or won't share it.
+function getCurrentLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    )
+  })
+}
 
 const emptyForm = { make: '', model: '', color: '', plate: '' }
 
@@ -48,8 +62,18 @@ export default function Deploy() {
     setSubmitting(true)
     try {
       // the backend saves the mission and gives it the next number
-      const mission = await createMission(form)
-      navigate(`/dashboard/${mission.mission_id}`)
+      const location = await getCurrentLocation()
+      const mission = await createMission(form, location)
+
+      // assign the nearest drone and ask it to start its pre-flight checks.
+      // If that fails the mission still exists; the Dashboard shows why and a retry button.
+      let launchError = ''
+      try {
+        await launchMission(mission.mission_id)
+      } catch (err) {
+        launchError = err.message === 'Failed to fetch' ? 'Could not reach the server.' : err.message
+      }
+      navigate(`/dashboard/${mission.mission_id}`, { state: { launchError } })
     } catch (err) {
       setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message)
       setSubmitting(false)
@@ -60,7 +84,22 @@ export default function Deploy() {
     <>
       <header className="deploy-header">
         <span className="deploy-logo">
-          {/* empty space saved for the real logo; put an <img> here later */}
+        <svg
+        className="hawkeye-icon deploy-logo-icon"
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+        >
+        <path
+         d="
+           M50 6
+           C54 25 62 38 94 50
+           C75 54 63 62 50 94
+           C46 75 38 62 6 50
+           C25 46 38 38 50 6
+           Z
+          "
+          />
+          </svg> 
           <span className="deploy-logo-placeholder" aria-hidden="true" />
           Hawkeye
         </span>

@@ -1,0 +1,26 @@
+# systemd service: keeps the Hawkeye API running on the EC2 server.
+# It starts on boot and restarts automatically if it crashes.
+#
+# Installed by setup_server.sh to /etc/systemd/system/hawkeye-api.service
+# Useful commands:
+#   sudo systemctl status hawkeye-api      # is it running?
+#   sudo systemctl restart hawkeye-api     # after pulling new code
+#   sudo journalctl -u hawkeye-api -f      # live logs
+
+[Unit]
+Description=Hawkeye FastAPI backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/hawkeye/backend
+EnvironmentFile=/etc/hawkeye/hawkeye.env
+# Only listens on 127.0.0.1 -- nginx is the public entrance (HTTPS on 443).
+# 1 worker: YOLO is memory-hungry; raise it only on a bigger instance.
+ExecStart=/home/ubuntu/hawkeye/backend/venv/bin/uvicorn api:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

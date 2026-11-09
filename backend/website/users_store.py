@@ -289,6 +289,79 @@ def reset_login_attempts(badge_num: str, dynamodb=None) -> None: #reset failed l
     )
 
 
+def get_user_by_email(email: str, dynamodb=None):
+    """Return the user registered with this email, or None."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    index = ensure_email_index_table(dynamodb)
+    entry = index.get_item(
+        Key={"email": email.strip().lower()},
+        ConsistentRead=True,
+    ).get("Item")
+    if entry is None:
+        return None
+    return get_user(entry["badge_num"], dynamodb)
+
+
+def save_password_reset_token( # store a hashed reset token on the user record
+    badge_num: str,
+    token_hash: str,
+    expires_at: int,
+    dynamodb=None,
+) -> None:
+    """Store a hashed, expiring password-reset token (replaces any older one)."""
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    table.update_item(
+        Key={"badge_num": badge_num.strip()},
+        UpdateExpression=(
+            "SET reset_token_hash = :hash, reset_expires_at = :expires, "
+            "reset_requested_at = :now"
+        ),
+        ConditionExpression="attribute_exists(badge_num)",
+        ExpressionAttributeValues={
+            ":hash": token_hash,
+            ":expires": expires_at,
+            ":now": int(time.time()),
+        },
+    )
+
+
+def reset_password_with_token( # swap in the new password if the token still matches
+    badge_num: str,
+    token_hash: str,
+    new_password_hash: str,
+    dynamodb=None,
+) -> bool:
+    """Set a new password when the token matches and hasn't expired.
+
+    Single use: the token is removed in the same write, and the login lock is
+    cleared. Returns False when the token is wrong, used, or expired.
+    """
+    dynamodb = dynamodb or get_dynamodb_resource()
+    table = ensure_users_table(dynamodb)
+    try:
+        table.update_item(
+            Key={"badge_num": badge_num.strip()},
+            UpdateExpression=(
+                "SET password_hash = :password, failed_attempts = :zero "
+                "REMOVE reset_token_hash, reset_expires_at, reset_requested_at, locked_until"
+            ),
+            ConditionExpression=(
+                "attribute_exists(badge_num) AND reset_token_hash = :hash "
+                "AND reset_expires_at > :now"
+            ),
+            ExpressionAttributeValues={
+                ":password": new_password_hash,
+                ":zero": 0,
+                ":hash": token_hash,
+                ":now": int(time.time()),
+            },
+        )
+    except table.meta.client.exceptions.ConditionalCheckFailedException:
+        return False
+    return True
+
+
 def main() -> int: # main function to ensure tables exist and print status
     try:
         table = ensure_users_table()

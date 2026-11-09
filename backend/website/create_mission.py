@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
+from botocore.exceptions import ClientError
+
 from database.database import get_dynamodb_resource
-from mission_numbers import format_mission_number, take_next_mission_number
+from mission_numbers import new_mission_id, usable_mission_id
 
 def get_required_input(question):
     while True:
@@ -23,32 +25,48 @@ def get_number(question):
             print("Please enter a valid number.")
 
 
-def create_mission_record(target_vehicle, request_location=None, dynamodb=None):
-    """Save a new mission with the next mission number and return it.
+def create_mission_record(target_vehicle, request_location=None, mission_id=None, dynamodb=None):
+    """Save a new mission and return it.
 
     Used by the terminal prompt below and by POST /missions in view_mission_status.py.
-    mission_id is the 4-digit number as text ("0001"), so it reads well on screen.
+    mission_id is a random code like "HWK-07-2410". Pass one in to keep the
+    code already shown on the Deploy page.
     """
     dynamodb = dynamodb or get_dynamodb_resource()
+    table = dynamodb.Table("Missions")
 
-    mission_number = take_next_mission_number(dynamodb)
+    # prefer the code from the page, then a few fresh ones if that one is taken
+    candidates = []
+    preferred = usable_mission_id(mission_id)
+    if preferred:
+        candidates.append(preferred)
+    while len(candidates) < 5:
+        candidate = new_mission_id()
+        if candidate not in candidates:
+            candidates.append(candidate)
 
-    mission = {
-        "mission_id": format_mission_number(mission_number),
-        "mission_number": mission_number,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "status": "pending",
-        "target_vehicle": target_vehicle,
-    }
-    if request_location:
-        mission["request_location"] = request_location
+    for candidate in candidates:
+        mission = {
+            "mission_id": candidate,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "status": "pending",
+            "target_vehicle": target_vehicle,
+        }
+        if request_location:
+            mission["request_location"] = request_location
 
-    # the condition is a safety net: never overwrite an existing mission
-    dynamodb.Table("Missions").put_item(
-        Item=mission,
-        ConditionExpression="attribute_not_exists(mission_id)",
-    )
-    return mission
+        try:
+            # never overwrite an existing mission
+            table.put_item(
+                Item=mission,
+                ConditionExpression="attribute_not_exists(mission_id)",
+            )
+            return mission
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+
+    raise RuntimeError("Could not assign a mission number")
 
 
 def create_mission():

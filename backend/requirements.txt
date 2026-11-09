@@ -1,9 +1,10 @@
+# API runtime. Computer-vision packages live in requirements-cv.txt.
 fastapi
 uvicorn
-ultralytics
-opencv-python
 pytest
 httpx
 boto3
+botocore[crt]
 bcrypt
 PyJWT
+moto[dynamodb]  # tests only: fake DynamoDB
