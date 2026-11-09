@@ -323,3 +323,38 @@ def test_fresh_telemetry_is_not_stale():
     assert not is_stale("2026-11-08T20:00:00Z", now)
     assert is_stale("2026-11-08T19:59:00Z", now)
     assert is_stale(None, now)
+
+
+# ---------- mission codes (HWK-07-2410) ----------
+
+VEHICLE = {"make": "Honda", "model": "Civic", "color": "Red", "license_plate": "ABC123"}
+
+
+def test_next_number_is_an_hwk_code(client):
+    from mission_numbers import usable_mission_id
+
+    code = client.get("/missions/next-number").json()["next_mission_id"]
+    assert usable_mission_id(code) == code
+
+
+def test_mission_keeps_the_code_shown_on_deploy(client):
+    shown = client.get("/missions/next-number").json()["next_mission_id"]
+    mission = client.post("/missions", json={**VEHICLE, "mission_id": shown}).json()
+    assert mission["mission_id"] == shown
+    assert client.get(f"/missions/{shown}/status").status_code == 200
+
+
+def test_mission_code_already_used_gets_a_new_one(client):
+    first = client.post("/missions", json={**VEHICLE, "mission_id": "HWK-01-0001"}).json()
+    second = client.post("/missions", json={**VEHICLE, "mission_id": "HWK-01-0001"}).json()
+    assert first["mission_id"] == "HWK-01-0001"
+    assert second["mission_id"] != "HWK-01-0001"
+    assert second["mission_id"].startswith("HWK-")
+
+
+def test_bad_or_missing_mission_code_gets_a_new_one(client):
+    from mission_numbers import usable_mission_id
+
+    for sent in (None, "0001", "HWK-1-1", "../etc"):
+        mission_id = client.post("/missions", json={**VEHICLE, "mission_id": sent}).json()["mission_id"]
+        assert usable_mission_id(mission_id) == mission_id

@@ -73,8 +73,8 @@ TABLE_DEFINITIONS = {
             {"AttributeName": "drone_id", "AttributeType": "S"},
         ],
     },
-    # Shared counters, e.g. {"counter_name": "missions", "value": 3}
-    # = the last mission number handed out (see mission_numbers.py)
+    # Shared counters, e.g. {"counter_name": "missions", "value": 3}.
+    # Not used for mission numbers any more (those are random HWK-07-2410 codes).
     "Counters": {
         "KeySchema": [
             {"AttributeName": "counter_name", "KeyType": "HASH"},

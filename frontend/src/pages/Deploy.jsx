@@ -62,9 +62,9 @@ export default function Deploy() {
     setError('')
     setSubmitting(true)
     try {
-      // the backend saves the mission and gives it the next number
+      // the backend saves the mission under the code shown on this page
       const location = await getCurrentLocation()
-      const mission = await createMission(form, location)
+      const mission = await createMission(form, location, nextMissionId)
 
       // assign the nearest drone and ask it to start its pre-flight checks.
       // If that fails the mission still exists; the Dashboard shows why and a retry button.

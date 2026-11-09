@@ -11,7 +11,12 @@ export const USE_MOCK = false
 
 // ---------- real backend ----------
 export async function fetchMissionStatus(missionId) {
-  const response = await apiFetch(`/missions/${missionId}/status`)
+  const response = await apiFetch(`/missions/${encodeURIComponent(missionId)}/status`)
+  if (response.status === 404) {
+    const error = new Error(`Mission ${missionId} doesn't exist.`)
+    error.notFound = true
+    throw error
+  }
   if (!response.ok) {
     throw new Error(`Request failed (${response.status})`)
   }

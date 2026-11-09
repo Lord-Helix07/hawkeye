@@ -1,7 +1,8 @@
 // dashboard page (Flight Status)
 //
 // Shows one mission's live data. The mission number comes from the URL:
-//   /dashboard/0001   (plain /dashboard shows the latest mission started)
+//   /dashboard/HWK-07-2410   (plain /dashboard shows the latest mission started
+//   on this computer, or a "no mission yet" note if there isn't one)
 // useMissionStatus refreshes the data every 2 seconds; every card just
 // displays the props it's given.
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -17,9 +18,9 @@ import { LaunchControls } from '../components/dashboard/LaunchControls.jsx'
 import { formatTime } from '../components/dashboard/format.js'
 
 export default function Dashboard() {
-  // no number in the URL: use the last mission started on this computer (or 0001)
-  const { missionId = getLastMissionId() ?? '0001' } = useParams()
-  const { status: liveStatus, error, refresh } = useMissionStatus(missionId)
+  // no number in the URL: use the last mission started on this computer (null if none)
+  const { missionId = getLastMissionId() } = useParams()
+  const { status: liveStatus, error, notFound, refresh } = useMissionStatus(missionId)
   const status = liveStatus ?? {} // empty until the server answers
   const telemetry = status.telemetry ?? {} // empty until the drone sends data
   // set by the Deploy page when the automatic launch request didn't go through
@@ -36,14 +37,21 @@ export default function Dashboard() {
           <button type="button" className="new-deploy-btn" onClick={() => navigate('/deploy')}>
             Deploy drone <span aria-hidden="true">→</span>
           </button>
-          <LaunchControls missionId={missionId} status={liveStatus} onChange={refresh} />
-          <span className="mission-label">Mission: {missionId}</span>
+          {missionId && !notFound && (
+            <LaunchControls missionId={missionId} status={liveStatus} onChange={refresh} />
+          )}
+          <span className="mission-label">Mission: {missionId ?? '—'}</span>
         </div>
       </header>
 
+      {!missionId && (
+        <p className="dashboard-notice" role="status">
+          No mission yet. Press Deploy drone to start one.
+        </p>
+      )}
       {error && (
         <p className="dashboard-alert" role="alert">
-          Lost connection to the server: {error}
+          {notFound ? error : `Lost connection to the server: ${error}`}
         </p>
       )}
       {launchError && !status?.launch_status && (

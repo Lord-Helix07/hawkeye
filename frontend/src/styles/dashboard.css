@@ -423,6 +423,17 @@ img.evidence-image {
   background-color: #e4e4e7;
 }
 
+/* "No mission yet" note on plain /dashboard before any mission was started here */
+.dashboard-notice {
+  margin: 16px 24px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background-color: var(--card-bg);
+  color: var(--muted);
+  font-size: 14px;
+}
+
 /* "Deploy drone →": starts a new mission (big and green) */
 .new-deploy-btn {
   padding: 12px 24px;

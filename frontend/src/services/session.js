@@ -32,7 +32,7 @@ export function clearSession() {
   }
 }
 
-// only allow redirecting back to a page on this site (e.g. "/dashboard/0001")
+// only allow redirecting back to a page on this site (e.g. "/dashboard/HWK-07-2410")
 export function safeNextPath(next) {
   return typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : null
 }

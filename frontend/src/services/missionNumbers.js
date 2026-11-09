@@ -1,19 +1,12 @@
-// Mission numbers: 0001, 0002, 0003...
+// Mission numbers: random codes like "HWK-07-2410" (backend/website/mission_numbers.py).
 //
-// The backend hands out the numbers from one shared counter in DynamoDB
-// (backend/mission_numbers.py), so every officer's computer sees the same count.
+// The Deploy page gets a code to show, then sends that same code back with
+// createMission, so the saved mission matches what the officer saw.
 import { apiFetch } from './api.js'
 
 const LAST_MISSION_KEY = 'hawkeye_last_mission_id'
 
-// 1 -> "0001"
-export function formatMissionNumber(number) {
-  return String(number).padStart(4, '0')
-}
-
-// GET /missions/next-number -> "0003"
-// A preview for the Deploy page. If someone else deploys first, the real
-// number (from createMission) will be higher.
+// GET /missions/next-number -> "HWK-07-2410"
 export async function fetchNextMissionId() {
   const response = await apiFetch('/missions/next-number')
   if (!response.ok) {
@@ -23,10 +16,12 @@ export async function fetchNextMissionId() {
   return data.next_mission_id
 }
 
-// POST /missions -> the saved mission, e.g. { mission_id: "0003", status: "pending", ... }
+// POST /missions -> the saved mission, e.g. { mission_id: "HWK-07-2410", status: "pending", ... }
 // location ({ latitude, longitude } or null) is where the drone should fly to;
 // the backend uses it to pick the nearest drone.
-export async function createMission(form, location = null) {
+// missionId is the code shown on the Deploy page. The backend keeps it unless
+// another mission already has it (very unlikely), then picks a new one.
+export async function createMission(form, location = null, missionId = null) {
   const response = await apiFetch('/missions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -37,6 +32,7 @@ export async function createMission(form, location = null) {
       license_plate: form.plate.trim(), // the form calls it "plate", the backend "license_plate"
       latitude: location?.latitude ?? null,
       longitude: location?.longitude ?? null,
+      mission_id: missionId,
     }),
   })
   if (response.status === 422) {

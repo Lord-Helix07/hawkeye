@@ -41,7 +41,7 @@ from fastapi.encoders import jsonable_encoder
 # It creates the connection to AWS DynamoDB or DynamoDB Local.
 from database.database import get_dynamodb_resource
 
-# Mission numbers (1, 2, 3, ...) and saving new missions.
+# Mission codes (random, like HWK-07-2410) and saving new missions.
 from create_mission import create_mission_record
 from mission_numbers import new_mission_id
 
