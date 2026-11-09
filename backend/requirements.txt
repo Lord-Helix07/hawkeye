@@ -4,3 +4,4 @@ ultralytics
 opencv-python
 pytest
 httpx
+boto3
