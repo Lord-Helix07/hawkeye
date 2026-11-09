@@ -22,7 +22,6 @@ import secrets
 import sys
 import time
 from email.utils import formataddr
-from pathlib import Path
 from urllib.parse import urlencode
 
 import bcrypt
@@ -30,11 +29,6 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-
-# users_store.py lives in website/. This file stays at the backend root.
-_WEBSITE_DIR = str(Path(__file__).resolve().parent / "website")
-if _WEBSITE_DIR not in sys.path:
-    sys.path.insert(0, _WEBSITE_DIR)
 
 from users_store import (
     UsersTableSchemaError,

@@ -41,9 +41,9 @@ from fastapi.encoders import jsonable_encoder
 # It creates the connection to AWS DynamoDB or DynamoDB Local.
 from database.database import get_dynamodb_resource
 
-# Mission numbers (0001, 0002, ...) and saving new missions.
+# Mission numbers (1, 2, 3, ...) and saving new missions.
 from create_mission import create_mission_record
-from mission_numbers import format_mission_number, peek_next_mission_number
+from mission_numbers import new_mission_id
 
 
 # The mission routes. They're plugged into the one backend app in api.py
@@ -62,6 +62,7 @@ class CreateMissionRequest(BaseModel):
     identifying_features: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    mission_id: str | None = None
 
 
 # This route must stay ABOVE /missions/{mission_id}, otherwise FastAPI would
@@ -70,13 +71,13 @@ class CreateMissionRequest(BaseModel):
 def get_next_mission_number():
     """Preview of the number the next mission will get (shown on the Deploy page)."""
     try:
-        number = peek_next_mission_number()
+        number = new_mission_id()
     except (BotoCoreError, ClientError) as error:
         raise HTTPException(status_code=503, detail=f"Database error: {error}")
 
     return {
         "next_mission_number": number,
-        "next_mission_id": format_mission_number(number),
+        "next_mission_id": str(number),
     }
 
 
@@ -104,7 +105,11 @@ def create_mission_endpoint(request: CreateMissionRequest):
         }
 
     try:
-        mission = create_mission_record(target_vehicle, request_location)
+        mission = create_mission_record(
+            target_vehicle,
+            request_location,
+            mission_id=request.mission_id,
+        )
     except (BotoCoreError, ClientError) as error:
         raise HTTPException(status_code=503, detail=f"Database error: {error}")
 

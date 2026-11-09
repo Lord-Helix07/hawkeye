@@ -12,7 +12,7 @@ It does the two things the Pi is supposed to do:
 
 How to use it (from backend/, with the backend running):
   1. Create a mission on the Deploy page (allow location so it has a target).
-  2. python fake_drone.py 0003
+  2. python tests/fake_drone.py 0003
      It registers "drone-sim" in Drones right next to the target, so
      "Launch" assigns it (it's the nearest available drone).
   3. Open the Dashboard for that mission and click Launch -> Confirm -> Land.
@@ -36,8 +36,13 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
 
 from botocore.exceptions import ClientError
+
+_BACKEND = Path(__file__).resolve().parents[1]
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 from database.database import get_dynamodb_resource
 

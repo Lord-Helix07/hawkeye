@@ -1,61 +1,27 @@
-"""Hands out mission numbers 0001, 0002, 0003, ... from one shared counter.
+"""Mission numbers for the MVP: a short random code like HWK-07-2410.
 
-The counter is one item in the Counters table:
-    {"counter_name": "missions", "value": <last number handed out>}
-
-take_next_mission_number() uses DynamoDB's ADD, which is atomic: even if two
-officers press Deploy at the same moment, they can never get the same number.
+That code is also the mission_id. The Deploy page shows one, then sends it
+back when the officer presses Deploy so the saved mission matches the screen.
 """
 
-from botocore.exceptions import ClientError
+import random
+import re
 
-from database.database import create_tables, get_dynamodb_resource
-
-COUNTERS_TABLE = "Counters"
-MISSION_COUNTER = "missions"
+MISSION_ID_PATTERN = re.compile(r"^HWK-\d{2}-\d{4}$")
 
 
-def format_mission_number(number: int) -> str:
-    """1 -> "0001" (this is also the mission_id saved in the Missions table)."""
-    return f"{number:04d}"
+def new_mission_id() -> str:
+    """A code like HWK-07-2410."""
+    group = random.randint(0, 99)
+    number = random.randint(0, 9999)
+    return f"HWK-{group:02d}-{number:04d}"
 
 
-def _run_on_counters_table(action, dynamodb=None):
-    """Run action(table), creating the Counters table first if it doesn't exist yet."""
-    dynamodb = dynamodb or get_dynamodb_resource()
-    try:
-        return action(dynamodb.Table(COUNTERS_TABLE))
-    except ClientError as error:
-        if error.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
-            raise
-        create_tables()  # first run on this database: add the missing table, then retry
-        return action(dynamodb.Table(COUNTERS_TABLE))
-
-
-def peek_next_mission_number(dynamodb=None) -> int:
-    """The number the next mission will get, without using it up.
-
-    Only a preview: if someone else deploys first, the real number will be higher.
-    """
-
-    def read(table):
-        item = table.get_item(Key={"counter_name": MISSION_COUNTER}).get("Item")
-        return int(item["value"]) + 1 if item else 1
-
-    return _run_on_counters_table(read, dynamodb)
-
-
-def take_next_mission_number(dynamodb=None) -> int:
-    """Use up the next number and return it. Safe to call from many places at once."""
-
-    def increment(table):
-        result = table.update_item(
-            Key={"counter_name": MISSION_COUNTER},
-            UpdateExpression="ADD #value :one",
-            ExpressionAttributeNames={"#value": "value"},  # "value" is a reserved word
-            ExpressionAttributeValues={":one": 1},
-            ReturnValues="UPDATED_NEW",
-        )
-        return int(result["Attributes"]["value"])
-
-    return _run_on_counters_table(increment, dynamodb)
+def usable_mission_id(mission_id) -> str | None:
+    """The id if it matches HWK-07-2410, otherwise None."""
+    if not isinstance(mission_id, str):
+        return None
+    mission_id = mission_id.strip()
+    if MISSION_ID_PATTERN.fullmatch(mission_id):
+        return mission_id
+    return None
