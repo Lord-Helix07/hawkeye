@@ -103,7 +103,7 @@ if __name__ == "__main__":
 
     client = TestClient(app)
     response = client.post(
-        "/login",
+        "/api/login",
         json={"badge_num": badge_num, "password": password},
     )
     print(response.status_code, response.json())

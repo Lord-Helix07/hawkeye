@@ -1,21 +1,49 @@
+from pathlib import Path
+
 import cv2
-from ultralytics import YOLO
 import numpy as np
 
 try:
     from bounding_boxes import create_bounding_boxes, draw_bounding_boxes
+    from object_detection import detections_from_result, model
 except ImportError:
     from backend.bounding_boxes import create_bounding_boxes, draw_bounding_boxes
+    from backend.object_detection import detections_from_result, model
 
-target_track_id = None
-lost_frames = 0
 MAX_LOST_FRAMES = 60
-target_features = None
-target_box = None
+TRACKER_CONFIG = str(Path(__file__).parent / "bytetrack_custom.yaml")
+DEFAULT_VIDEO = Path(__file__).parent / "videos" / "vid1.mp4"
 
-video_path = "backend/videos/vid1.mp4"
 
-model = YOLO("yolo11n.pt")
+class TrackState:
+    """Target chosen for the current pursuit, and how long it has been missing."""
+
+    def __init__(self):
+        self.target_track_id = None
+        self.lost_frames = 0
+        self.target_features = None
+        self.target_box = None
+        self.status = "Waiting for a vehicle..."
+
+
+def reset_tracker():
+    """Drop ByteTrack's memory so the next video starts with new ids."""
+    if getattr(model, "predictor", None) is not None:
+        model.predictor = None
+
+
+def track_vehicles(frame):
+    """Detect vehicles and assign ByteTrack ids for this frame."""
+    results = model.track(
+        frame,
+        persist=True,
+        tracker=TRACKER_CONFIG,
+        classes=[2, 3, 5, 7],
+        verbose=False,
+    )
+    detections = detections_from_result(results[0])
+    return [detection for detection in detections if "track_id" in detection]
+
 
 def get_vehicle_features(frame, detection):
     """Save simple appearance features for one vehicle."""
@@ -29,7 +57,6 @@ def get_vehicle_features(frame, detection):
 
     if crop.size == 0:
         return None
-
 
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
 
@@ -78,12 +105,16 @@ def compare_features(target_features, candidate_features):
     )
 
 
+def _center(box):
+    if "center_x" in box and "center_y" in box:
+        return box["center_x"], box["center_y"]
+    return (box["x1"] + box["x2"]) / 2, (box["y1"] + box["y2"]) / 2
+
+
 def same_neighborhood(detection, last_box):
     """True when a car is within a few car-lengths of where the target was last seen."""
-    last_cx = (last_box["x1"] + last_box["x2"]) / 2
-    last_cy = (last_box["y1"] + last_box["y2"]) / 2
-    cx = (detection["x1"] + detection["x2"]) / 2
-    cy = (detection["y1"] + detection["y2"]) / 2
+    last_cx, last_cy = _center(last_box)
+    cx, cy = _center(detection)
     reach = max(last_box["width"], last_box["height"]) * 3
     return np.hypot(cx - last_cx, cy - last_cy) <= reach
 
@@ -122,153 +153,94 @@ def find_reidentified_vehicle(frame, detections, target_features, last_box):
     return None
 
 
-results = model.track(
-    source=video_path,
-    stream=True,
-    persist=True,
-    tracker="backend/bytetrack_custom.yaml",
-    classes=[2, 3, 5, 7],
-    verbose=False
-)
+def follow_target(frame, vehicles, state):
+    """Keep the selected vehicle, or reidentify it after ByteTrack drops the id."""
+    visible_ids = {vehicle["box_id"] for vehicle in vehicles}
 
-for result in results:
-    frame = result.orig_img.copy()
-    detections = []
+    if state.target_track_id is None:
+        if len(vehicles) == 0:
+            state.status = "Waiting for a vehicle..."
+            return None
 
-    if result.boxes is not None and result.boxes.id is not None:
-        boxes = result.boxes.xyxy.cpu().tolist()
-        classes = result.boxes.cls.int().cpu().tolist()
-        confidences = result.boxes.conf.cpu().tolist()
-        track_ids = result.boxes.id.int().cpu().tolist()
+        target = vehicles[0]
+        state.target_track_id = target["box_id"]
+        state.target_box = target
+        state.target_features = get_vehicle_features(frame, target)
+        state.lost_frames = 0
+        state.status = f"Tracking target ID {state.target_track_id}"
+        print(f"Target selected: Vehicle ID {state.target_track_id}")
+        return target
 
-        for box, class_id, confidence, track_id in zip(
-            boxes,
-            classes,
-            confidences,
-            track_ids
-        ):
-            x1, y1, x2, y2 = box
-
-            detections.append({
-                "track_id": track_id,
-                "class_id": class_id,
-                "class_name": model.names[class_id],
-                "confidence": confidence,
-                "x1": x1,
-                "y1": y1,
-                "x2": x2,
-                "y2": y2,
-                "width": x2 - x1,
-                "height": y2 - y1,
-            })
-
-    vehicles = create_bounding_boxes(detections)
-
-    visible_ids = {
-        detection["track_id"]
-        for detection in detections
-    }
-
-    # Temporarily select the first vehicle for testing
-    if target_track_id is None:
-        if len(detections) > 0:
-            target_track_id = detections[0]["track_id"]
-            target_box = detections[0]
-            target_features = get_vehicle_features(frame, detections[0])
-            print(f"Target selected: Vehicle ID {target_track_id}")
-            status = f"Tracking target ID {target_track_id}"
-        else:
-            status = "Waiting for a vehicle..."
-
-    # Check whether the target is visible
-    elif target_track_id in visible_ids:
-        lost_frames = 0
-        target_box = next(
-            detection for detection in detections
-            if detection["track_id"] == target_track_id
+    if state.target_track_id in visible_ids:
+        state.lost_frames = 0
+        target = next(
+            vehicle for vehicle in vehicles
+            if vehicle["box_id"] == state.target_track_id
         )
-        status = f"Tracking target ID {target_track_id}"
+        state.target_box = target
+        state.status = f"Tracking target ID {state.target_track_id}"
+        return target
 
-    # Target is missing
-    else:
-        lost_frames += 1
+    state.lost_frames += 1
+    if state.lost_frames == 1:
+        print("Target lost. Reidentification started.")
 
-        if lost_frames == 1:
-            print("Target lost. Reidentification started.")
+    if state.target_features is not None and state.lost_frames <= MAX_LOST_FRAMES:
+        reidentified_vehicle = find_reidentified_vehicle(
+            frame,
+            vehicles,
+            state.target_features,
+            state.target_box,
+        )
+        if reidentified_vehicle is not None:
+            state.target_track_id = reidentified_vehicle["box_id"]
+            state.target_box = reidentified_vehicle
+            state.target_features = get_vehicle_features(frame, reidentified_vehicle)
+            state.lost_frames = 0
+            state.status = f"Target reidentified as ID {state.target_track_id}"
+            print(state.status)
+            return reidentified_vehicle
 
-        # Only try ReID while the target is missing
-        if (
-            target_features is not None
-            and lost_frames <= MAX_LOST_FRAMES
-        ):
-            reidentified_vehicle = find_reidentified_vehicle(
-                frame,
-                detections,
-                target_features,
-                target_box,
-            )
+    state.status = f"Target missing: {state.lost_frames}/{MAX_LOST_FRAMES}"
+    if state.lost_frames >= MAX_LOST_FRAMES:
+        state.status = "Target lost completely."
+    return None
 
-            if reidentified_vehicle is not None:
-                target_track_id = reidentified_vehicle["track_id"]
-                target_box = reidentified_vehicle
 
-                target_features = get_vehicle_features(frame,reidentified_vehicle)
+def preview_video(video_path=DEFAULT_VIDEO):
+    """Show tracking on a video. The pursuit pipeline itself lives in main.py."""
+    reset_tracker()
+    state = TrackState()
+    capture = cv2.VideoCapture(str(video_path))
+    if not capture.isOpened():
+        raise FileNotFoundError(f"Could not open input video: {video_path}")
 
-                lost_frames = 0
-                status = f"Target reidentified as ID {target_track_id}"
-                print(status)
-            else:
-                status = f"Target missing: {lost_frames}/{MAX_LOST_FRAMES}"
+    while True:
+        success, frame = capture.read()
+        if not success:
+            break
 
-        else:
-            status = f"Target missing: {lost_frames}/{MAX_LOST_FRAMES}"
+        detections = track_vehicles(frame)
+        vehicles = create_bounding_boxes(detections)
+        target = follow_target(frame, vehicles, state)
+        selected_box_id = None if target is None else target["box_id"]
+        frame = draw_bounding_boxes(frame, vehicles, selected_box_id=selected_box_id)
+        cv2.putText(
+            frame,
+            state.status,
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 0, 255),
+            2,
+        )
+        cv2.imshow("ByteTrack Test", frame)
+        if cv2.waitKey(30) & 0xFF == ord("q"):
+            break
 
-        if lost_frames >= MAX_LOST_FRAMES:
-            status = "Target lost completely."
+    capture.release()
+    cv2.destroyAllWindows()
 
-    # Draw all normal vehicle boxes
-    frame = draw_bounding_boxes(frame, vehicles)
 
-    # Draw the target with a red box
-    for detection in detections:
-        if detection["track_id"] == target_track_id:
-            x1 = round(detection["x1"])
-            y1 = round(detection["y1"])
-            x2 = round(detection["x2"])
-            y2 = round(detection["y2"])
-
-            cv2.rectangle(
-                frame,
-                (x1, y1),
-                (x2, y2),
-                (0, 0, 255),
-                3
-            )
-
-            cv2.putText(
-                frame,
-                f"TARGET ID: {target_track_id}",
-                (x1, max(y1 - 10, 20)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 0, 255),
-                2
-            )
-
-    # Show the current status
-    cv2.putText(
-        frame,
-        status,
-        (20, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (0, 0, 255),
-        2
-    )
-
-    cv2.imshow("ByteTrack Test", frame)
-
-    if cv2.waitKey(30) & 0xFF == ord("q"):
-        break
-
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    preview_video()

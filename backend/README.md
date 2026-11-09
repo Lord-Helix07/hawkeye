@@ -12,6 +12,6 @@ source ../.venv/bin/activate
 uvicorn api:app --reload --port 8000
 ```
 
-- Check it's up: http://localhost:8000/server-status
-- See and try every route: http://localhost:8000/docs
+- Check it's up: http://localhost:8000/api/server-status
+- See and try every route: http://localhost:8000/api/docs
 - New features: put routes in their own file as an `APIRouter`, then add `app.include_router(...)` in `api.py`.

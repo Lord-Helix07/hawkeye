@@ -1,7 +1,6 @@
+# API runtime. Computer-vision packages live in requirements-cv.txt.
 fastapi
 uvicorn
-ultralytics
-opencv-python
 pytest
 httpx
 boto3

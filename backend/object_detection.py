@@ -14,22 +14,28 @@ model = YOLO("yolo11n.pt")
 print("YOLO11 model loaded successfully")
 
 
-# Function to detect vehicles in a given frame and stores it in vehicles list
-def detect_vehicles(frame):
-    """Detect supported vehicle classes and return their box coordinates."""
-    results = model(frame, classes=[2, 3, 5, 7])
-    boxes = results[0].boxes
-    vehicles = []
+def detections_from_result(result):
+    """Turn one YOLO result into vehicle dicts. Includes track_id when ByteTrack set one."""
+    boxes = result.boxes
+    if boxes is None or len(boxes) == 0:
+        return []
 
-    for box in boxes:
-        class_id = int(box.cls[0])
+    xyxy = boxes.xyxy.cpu().tolist()
+    classes = boxes.cls.int().cpu().tolist()
+    confidences = boxes.conf.cpu().tolist()
+    if boxes.id is None:
+        track_ids = [None] * len(xyxy)
+    else:
+        track_ids = boxes.id.int().cpu().tolist()
+
+    vehicles = []
+    for box, class_id, confidence, track_id in zip(xyxy, classes, confidences, track_ids):
         class_name = model.names[class_id]
         if class_name not in ("car", "motorcycle", "bus", "truck"):
             continue
 
-        confidence = float(box.conf[0])
-        x1, y1, x2, y2 = box.xyxy[0].tolist()
-        vehicles.append({
+        x1, y1, x2, y2 = box
+        detection = {
             #Note from Shivaji: Tissa's code requires id,width,height --> plugging those into pranavs code
             "class_id": class_id,
             "class_name": class_name,
@@ -40,9 +46,19 @@ def detect_vehicles(frame):
             "y2": y2,
             "width": x2 - x1,
             "height": y2 - y1,
-        })
+        }
+        if track_id is not None:
+            detection["track_id"] = track_id
+        vehicles.append(detection)
 
     return vehicles
+
+
+# Function to detect vehicles in a given frame and stores it in vehicles list
+def detect_vehicles(frame):
+    """Detect supported vehicle classes and return their box coordinates."""
+    results = model(frame, classes=[2, 3, 5, 7])
+    return detections_from_result(results[0])
 
 
 # Load a test frame and detect vehicles

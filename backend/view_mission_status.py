@@ -249,13 +249,13 @@ def main():
         # Send a GET request to the FastAPI endpoint.
         #
         # Example:
-        #     http://127.0.0.1:8000/missions/M001
+        #     http://127.0.0.1:8000/api/missions/M001
         #
         # This means the terminal program communicates with the
         # database through FastAPI instead of accessing DynamoDB
         # directly from the command-line section.
         response = httpx.get(
-            f"http://127.0.0.1:8000/missions/{mission_id}",
+            f"http://127.0.0.1:8000/api/missions/{mission_id}",
             timeout=5,
         )
 

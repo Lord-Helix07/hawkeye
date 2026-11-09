@@ -27,3 +27,27 @@ def test_create_bounding_boxes():
     assert vehicles[0]["height"] == 120
     assert vehicles[0]["center_x"] == 510
     assert vehicles[0]["center_y"] == 270
+
+
+def test_track_id_is_kept_as_box_id():
+    detections = [
+        {
+            "track_id": 17,
+            "class_id": 2,
+            "class_name": "car",
+            "confidence": 0.93,
+            "x1": 420,
+            "y1": 210,
+            "x2": 600,
+            "y2": 330,
+            "width": 180,
+            "height": 120,
+        }
+    ]
+
+    vehicles = create_bounding_boxes(detections)
+
+    assert vehicles[0]["box_id"] == 17
+    assert vehicles[0]["track_id"] == 17
+    assert vehicles[0]["center_x"] == 510
+    assert vehicles[0]["center_y"] == 270

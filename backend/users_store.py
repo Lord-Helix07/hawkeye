@@ -9,15 +9,8 @@ import time
 import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from boto3.dynamodb.types import TypeSerializer
-
-
 class BadgeNumTaken(Exception):
     """A user with this badge number already exists."""
-
-
-class EmailTaken(Exception):
-    """A user with this email address already exists."""
 
 
 class LoginLocked(Exception):
@@ -34,10 +27,6 @@ class UsersTableSchemaError(Exception):
 
 def users_table_name() -> str:
     return os.getenv("USERS_TABLE", "Users")
-
-
-def users_email_index_table_name() -> str:
-    return os.getenv("USERS_EMAIL_INDEX_TABLE", "UsersByEmail") 
 
 
 def _dynamodb_kwargs() -> dict:
@@ -60,11 +49,6 @@ def _dynamodb_kwargs() -> dict:
 def get_dynamodb_resource(): # connect to DynamoDB
     """Return a DynamoDB resource using the default credential chain."""
     return boto3.resource("dynamodb", **_dynamodb_kwargs())
-
-
-def get_dynamodb_client():
-    """Return a low-level DynamoDB client for typed transaction requests."""
-    return boto3.client("dynamodb", **_dynamodb_kwargs())
 
 
 def _table_names(client) -> set[str]: # get all table names in the DynamoDB
@@ -112,75 +96,28 @@ def ensure_users_table(dynamodb=None):
     return _ensure_keyed_table(dynamodb, users_table_name(), "badge_num")
 
 
-def ensure_email_index_table(dynamodb=None):
-    """Create or validate the table that reserves each email exactly once."""
-    dynamodb = dynamodb or get_dynamodb_resource()
-    return _ensure_keyed_table(dynamodb, users_email_index_table_name(), "email")
-
-
-_serializer = TypeSerializer()
-
-
-def _encode_item(item: dict) -> dict:
-    """Convert normal Python values to low-level DynamoDB AttributeValues."""
-    return {key: _serializer.serialize(value) for key, value in item.items()}
-
-
-def create_user( # create a new user and reserve its email 
+def create_user(
     badge_num: str,
     password_hash: str,
-    email: str,
     dynamodb=None,
 ) -> None:
-    """Insert a user and reserve its email atomically.
-
-    Fails if either the badge number or normalized email is already registered.
-    """
+    """Insert a user keyed by badge number. Fails if that badge is already registered."""
     badge_num = badge_num.strip()
-    email = email.strip().lower()
     dynamodb = dynamodb or get_dynamodb_resource()
-    ensure_users_table(dynamodb)
-    ensure_email_index_table(dynamodb)
-    client = get_dynamodb_client()
-    table_name = users_table_name()
-    email_index_table_name = users_email_index_table_name()
-    created_at = _utc_now()
+    table = ensure_users_table(dynamodb)
 
     try:
-        client.transact_write_items(
-            TransactItems=[
-                {
-                    "Put": {
-                        "TableName": table_name,
-                        "Item": _encode_item({
-                            "badge_num": badge_num,
-                            "email": email,
-                            "password_hash": password_hash,
-                            "status": "active",
-                            "created_at": created_at,
-                        }),
-                        "ConditionExpression": "attribute_not_exists(badge_num)",
-                    }
-                },
-                {
-                    "Put": {
-                        "TableName": email_index_table_name,
-                        "Item": _encode_item({
-                            "email": email,
-                            "badge_num": badge_num,
-                        }),
-                        "ConditionExpression": "attribute_not_exists(email)",
-                    }
-                },
-            ]
+        table.put_item(
+            Item={
+                "badge_num": badge_num,
+                "password_hash": password_hash,
+                "status": "active",
+                "created_at": _utc_now(),
+            },
+            ConditionExpression="attribute_not_exists(badge_num)",
         )
-    except client.exceptions.TransactionCanceledException as error: 
-        reasons = error.response.get("CancellationReasons", [])
-        if reasons and reasons[0].get("Code") == "ConditionalCheckFailed":
-            raise BadgeNumTaken from error
-        if len(reasons) > 1 and reasons[1].get("Code") == "ConditionalCheckFailed":
-            raise EmailTaken from error
-        raise
+    except table.meta.client.exceptions.ConditionalCheckFailedException as error:
+        raise BadgeNumTaken from error
 
 
 
@@ -293,11 +230,10 @@ def reset_login_attempts(badge_num: str, dynamodb=None) -> None:
 def main() -> int: # main function to ensure tables exist and print status
     try:
         table = ensure_users_table()
-        email_index = ensure_email_index_table()
     except (BotoCoreError, ClientError, UsersTableSchemaError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    print(f"Users tables ready: {table.name}, {email_index.name}")
+    print(f"Users table ready: {table.name}")
     return 0
 
 

@@ -124,6 +124,16 @@ PI_CAMERA_3_6MM = {
     "camera_mount": 45,
 }
 
+# Stand-in until the flight controller supplies altitude, attitude, and GPS with each frame.
+STAND_IN_TELEMETRY = {
+    "altitude": _DRONE_ALTITUDE_M,
+    "pitch": 0,
+    "roll": 0,
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "heading": 0.0,
+}
+
 #test code
 def fake_package(center_x=None, center_y=None, pitch=0, roll=0):
     center = image_center(_FRAME_WIDTH, _FRAME_HEIGHT)
