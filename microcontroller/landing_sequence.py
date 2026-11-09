@@ -28,16 +28,6 @@ def _result(state, trigger_reason, **extra):
     return result
 
 
-def _emit(progress, status, result):
-    if progress is None:
-        return
-    try:
-        progress(status, result)
-    except Exception as error:
-        if "report_error" not in result:
-            result["report_error"] = str(error)
-
-
 def _set(result, state, reason, mode_confirmed, touchdown):
     result["state"] = state
     result["reason"] = reason
@@ -53,7 +43,7 @@ def _show_landing(result):
     result["touchdown_confirmed"] = False
 
 
-def _monitor(cache, result, confirm_mode, progress, mode_timeout, landing_timeout):
+def _monitor(cache, result, confirm_mode, progress, mode_timeout, landing_timeout, pump=None):
     fc_connection.mark_operation(cache)
     started = cache["operation_at"]
     deadline = started + (mode_timeout if confirm_mode else landing_timeout)
@@ -63,13 +53,15 @@ def _monitor(cache, result, confirm_mode, progress, mode_timeout, landing_timeou
 
     if mode_confirmed:
         _show_landing(result)
-        _emit(progress, LANDING, result)
+        fc_utils.emit_progress(progress, LANDING, result)
         reported_landing = True
 
     while time.monotonic() < deadline:
         remaining = max(0.0, deadline - time.monotonic())
         try:
             message = fc_connection.read(cache, min(0.2, remaining))
+            if pump is not None:
+                pump()
         except (RuntimeError, OSError, TimeoutError):
             reason = (
                 "Landing completion could not be verified."
@@ -80,14 +72,14 @@ def _monitor(cache, result, confirm_mode, progress, mode_timeout, landing_timeou
         now = time.monotonic()
         kind = None if message is None else message.get_type()
 
-        if confirm_mode and fc_status.mode_is(cache, "LAND", now):
+        if confirm_mode and fc_status.commanded_mode(cache, "LAND", now):
             confirm_mode = False
             mode_confirmed = True
             touchdown_mark = now
             deadline = now + landing_timeout
             if not reported_landing:
                 _show_landing(result)
-                _emit(progress, LANDING, result)
+                fc_utils.emit_progress(progress, LANDING, result)
                 reported_landing = True
         elif kind == "COMMAND_ACK" and not mode_confirmed:
             if fc_utils.rejected_set_mode(message):
@@ -125,7 +117,7 @@ def _monitor(cache, result, confirm_mode, progress, mode_timeout, landing_timeou
     return _set(result, "LANDING_OUTCOME_UNKNOWN", reason, mode_confirmed, False)
 
 
-def _attempt(cache, progress, trigger_reason, mode_timeout, landing_timeout, status_timeout):
+def _attempt(cache, progress, trigger_reason, mode_timeout, landing_timeout, status_timeout, pump=None):
     attempted = False
     try:
         # Stop at the first fresh heartbeat. Waiting until the mode is
@@ -134,7 +126,10 @@ def _attempt(cache, progress, trigger_reason, mode_timeout, landing_timeout, sta
             cache,
             status_timeout,
             lambda: heartbeat.view(cache["heartbeat"], time.monotonic())["fresh"],
+            pump=pump,
         )
+        if fc_status.mode_is(cache, "LAND", time.monotonic()):
+            fc_connection.drain(cache)
         already_landing = fc_status.mode_is(cache, "LAND", time.monotonic())
         if already_landing:
             # Drop touchdown samples buffered before this request.
@@ -172,6 +167,7 @@ def _attempt(cache, progress, trigger_reason, mode_timeout, landing_timeout, sta
             progress=progress,
             mode_timeout=mode_timeout,
             landing_timeout=landing_timeout,
+            pump=pump,
         )
     except (RuntimeError, OSError, TimeoutError) as error:
         return _result(
@@ -190,6 +186,7 @@ def run_landing(
     mode_timeout=None,
     landing_timeout=None,
     status_timeout=None,
+    pump=None,
 ):
 
     if mode_timeout is None:
@@ -212,10 +209,11 @@ def run_landing(
             mode_timeout,
             landing_timeout,
             status_timeout,
+            pump=pump,
         )
     if result["state"] == LANDED and not (
         result["land_mode_confirmed"] and result["touchdown_confirmed"]
     ):
         raise RuntimeError("LANDED result does not match the confirmation flags.")
-    _emit(progress, result["state"], result)
+    fc_utils.emit_progress(progress, result["state"], result)
     return result

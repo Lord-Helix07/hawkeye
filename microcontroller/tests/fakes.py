@@ -51,6 +51,8 @@ class FakeMav:
         self.link = link
 
     def command_long_send(self, *args):
+        if getattr(self.link, "fail_command", False):
+            raise RuntimeError("command write failed")
         self.link.commands.append(args)
 
 
@@ -67,6 +69,7 @@ class FakeLink:
         self.close_count = 0
         self.reads = 0
         self.fail_set_mode = False
+        self.fail_command = False
         self.mav = FakeMav(self)
         self.target_system = 1
         self.target_component = 1
@@ -103,6 +106,9 @@ class FakeLink:
             message = self.queued.pop(0)
             self.clock.advance(0.05)
             return message
+        # A zero timeout is the shared drain. It must not invent new frames.
+        if timeout == 0:
+            return None
         message = self.default(self)
         self.clock.advance(0.05 if message is not None else 0.25)
         return message
@@ -292,37 +298,15 @@ def prime_ready(cache, clock, *, armed=False, mode=GUIDED, alt_mm=300,
     return cache
 
 
-def run_scripted_launch(monkeypatch, clock, link, **kwargs):
-    monkeypatch.setattr(
-        launch_sequence,
-        "connect",
-        lambda address, baud: link,
-    )
-    options = {
-        "connection_address": "mock://fc",
-        "baud_rate": 115200,
-        "config": BATTERY_CONFIG,
-        "execute_flight": True,
-        "simulation_confirmed": True,
-        "allow_hardware_flight": False,
-        "auto_recovery_land": False,
-    }
-    options.update(kwargs)
-    return launch_sequence.run_launch(**options)
+def run_scripted_launch(monkeypatch, clock, link, drone_id="drone-1", **kwargs):
+    from flight_controller import fc_connection
+
+    cache = fc_connection.cache_for(link)
+    return launch_sequence.run_launch(cache, drone_id, **kwargs)
 
 
 def run_scripted_landing(monkeypatch, link, **kwargs):
-    monkeypatch.setattr(
-        landing_sequence,
-        "connect",
-        lambda address, baud: link,
-    )
-    options = {
-        "connection_address": "mock://fc",
-        "baud_rate": 115200,
-        "execute_landing": True,
-        "simulation_confirmed": True,
-        "allow_hardware_landing": False,
-    }
-    options.update(kwargs)
-    return landing_sequence.run_landing(**options)
+    from flight_controller import fc_connection
+
+    cache = None if link is None else fc_connection.cache_for(link)
+    return landing_sequence.run_landing(cache, **kwargs)
