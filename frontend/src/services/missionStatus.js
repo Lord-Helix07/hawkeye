@@ -5,13 +5,13 @@
 // USE_MOCK = true swaps in fake data in the same shape, for working on the
 // page without the backend or a drone.
 
-import { API_URL } from './api.js'
+import { apiFetch } from './api.js'
 
 export const USE_MOCK = false
 
 // ---------- real backend ----------
 export async function fetchMissionStatus(missionId) {
-  const response = await fetch(`${API_URL}/missions/${missionId}/status`)
+  const response = await apiFetch(`/missions/${missionId}/status`)
   if (!response.ok) {
     throw new Error(`Request failed (${response.status})`)
   }

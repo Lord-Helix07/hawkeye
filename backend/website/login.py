@@ -6,6 +6,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from auth_tokens import TOKEN_TTL_SECONDS, create_token
 from users_store import (
     LoginLocked,
     UsersTableSchemaError,
@@ -73,7 +74,13 @@ def login(request: LoginRequest):
             raise HTTPException(status_code=401, detail=detail)
 
         reset_login_attempts(badge_num)
-        return {"message": "Login successful", "badge_num": badge_num}
+        # the website sends this token back on officer-only routes (see auth_tokens.py)
+        return {
+            "message": "Login successful",
+            "badge_num": badge_num,
+            "token": create_token(badge_num),
+            "expires_in": TOKEN_TTL_SECONDS,
+        }
 
     except HTTPException: 
         raise

@@ -41,8 +41,10 @@ def client(dynamodb):
     from fastapi.testclient import TestClient
 
     from api import app
+    from auth_tokens import create_token
 
-    return TestClient(app)
+    # the mission routes need a login token
+    return TestClient(app, headers={"Authorization": f"Bearer {create_token('1234')}"})
 
 
 def add_mission(dynamodb, **extra):

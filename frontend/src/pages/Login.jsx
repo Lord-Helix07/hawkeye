@@ -1,12 +1,14 @@
 //login page
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
 import { logIn, friendlyError } from '../services/auth.js'
+import { safeNextPath, saveSession } from '../services/session.js'
 import '../styles/login.css'
 
 export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams() // ?next=/dashboard/0001 when sent here by RequireLogin
   useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
@@ -23,8 +25,10 @@ export default function Login() {
     setError('')
     setSubmitting(true)
     try {
-      await logIn(badge, password) // checks the account in DynamoDB
-      navigate('/deploy')
+      const result = await logIn(badge, password) // checks the account in DynamoDB
+      saveSession(result.badge_num ?? badge.trim(), result.token)
+      // back to the page that sent us here (e.g. /dashboard/0001), otherwise Deploy
+      navigate(safeNextPath(searchParams.get('next')) ?? '/deploy', { replace: true })
     } catch (err) {
       setError(friendlyError(err))
     } finally {

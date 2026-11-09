@@ -63,6 +63,44 @@ def test_login_with_badge_and_password(client):
     assert login(client, badge="9999").status_code == 401
 
 
+def test_login_token_unlocks_mission_routes(client):
+    signup(client)
+    body = login(client).json()
+    assert body["badge_num"] == "1234" and body["token"]
+
+    # no token, a junk token, and a different scheme are all turned away
+    assert client.get("/missions/next-number").status_code == 401
+    assert client.get("/missions/next-number", headers={"Authorization": "Bearer junk"}).status_code == 401
+    assert client.post("/missions/0001/request-landing", headers={"Authorization": f"Basic {body['token']}"}).status_code == 401
+
+    # the token from /login gets through (mission 0001 doesn't exist, so 404, not 401)
+    auth = {"Authorization": f"Bearer {body['token']}"}
+    assert client.get("/missions/next-number", headers=auth).status_code == 200
+    assert client.get("/missions/0001/status", headers=auth).status_code == 404
+
+
+def test_expired_or_forged_token_is_rejected(client, monkeypatch):
+    import time
+
+    import auth_tokens
+
+    old = auth_tokens.create_token("1234", now=int(time.time()) - auth_tokens.TOKEN_TTL_SECONDS - 60)
+    response = client.get("/missions/next-number", headers={"Authorization": f"Bearer {old}"})
+    assert response.status_code == 401
+    assert "expired" in response.json()["detail"]
+
+    monkeypatch.setenv("AUTH_SECRET", "someone-elses-secret")
+    forged = auth_tokens.create_token("1234")
+    monkeypatch.setenv("AUTH_SECRET", "the-real-secret")
+    assert client.get("/missions/next-number", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
+
+
+def test_drone_telemetry_needs_no_login(client):
+    # the Raspberry Pi has no officer login, so its routes must stay open (422 = reached the route)
+    assert client.post("/telemetry", json={}).status_code != 401
+    assert client.post("/flight-controller/status", json={}).status_code != 401
+
+
 def test_forgot_password_unknown_email_looks_the_same(client):
     signup(client)
     known = client.post("/forgot-password", json={"email": "officer@example.com"})

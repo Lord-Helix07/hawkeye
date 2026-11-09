@@ -19,7 +19,7 @@ Adding a new feature (e.g. login):
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # website/ and drone/ keep flat imports (from login import ..., from launch import ...).
@@ -29,6 +29,7 @@ for _group in ("website", "drone"):
     if _folder not in sys.path:
         sys.path.insert(0, _folder)
 
+from auth_tokens import require_officer
 from signup import router as signup_router
 from view_mission_status import router as missions_router
 from login import router as login_router
@@ -75,13 +76,17 @@ class StripApiPrefix:
 
 app.add_middleware(StripApiPrefix)
 
+# Open to everyone: account routes, and the Raspberry Pi's telemetry.
 app.include_router(signup_router)  # POST /signup
-app.include_router(missions_router)  # /missions/...
-app.include_router(login_router)   # POST /login
+app.include_router(login_router)   # POST /login (returns the login token)
 app.include_router(password_reset_router)  # POST /forgot-password, /reset-password
-app.include_router(mission_status_router)  # GET /missions/{id}/status (Dashboard)
-app.include_router(launch_router)  # POST /missions/{id}/launch, confirm-launch, request-landing
 app.include_router(telemetry_router)  # POST /telemetry, /flight-controller/status (Raspberry Pi)
+
+# Logged-in officers only: needs "Authorization: Bearer <token from /login>".
+OFFICERS_ONLY = [Depends(require_officer)]
+app.include_router(missions_router, dependencies=OFFICERS_ONLY)  # /missions/...
+app.include_router(mission_status_router, dependencies=OFFICERS_ONLY)  # GET /missions/{id}/status (Dashboard)
+app.include_router(launch_router, dependencies=OFFICERS_ONLY)  # POST /missions/{id}/launch, confirm-launch, request-landing
 
 
 @app.get("/server-status")

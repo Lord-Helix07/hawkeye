@@ -16,6 +16,6 @@ export function useBackToLanding() {
     // swap the current history entry for landing, then put this page back on top,
     // so pressing back lands on '/'
     navigate('/', { replace: true })
-    navigate(location.pathname, { state: LANDING_BEHIND })
+    navigate(location.pathname + location.search, { state: LANDING_BEHIND }) // keep ?next=...
   }, [location, navigate])
 }
