@@ -36,6 +36,7 @@ TELEMETRY_TIMEOUT_SECONDS = 5.0
 MESSAGE_HISTORY_SIZE = 200
 DEFAULT_FRAME_MATCH_WINDOW_SECONDS = 2.0
 
+
 def _locked(method):
     """Keep each public snapshot coherent while another thread updates it."""
 
@@ -78,6 +79,7 @@ def _message_time_usec(message):
         value = _finite_int(time_boot_ms)
         return value * 1000 if value is not None else None
     return None
+
 
 def base_status():
     """Create the common flight-controller status shape."""

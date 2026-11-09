@@ -1,7 +1,7 @@
 """
 Flight-controller status
 
-- Reads data from heartbeat.py cache
+- imports data from heartbeat.py cache
 - sends that data to backend
 """
 

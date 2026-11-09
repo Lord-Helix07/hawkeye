@@ -435,20 +435,3 @@ def run_pursuit(results: Iterable[tuple[dict[str, Any], float]], cache: Any, *,
             reader.join(timeout=5.0)
             if reader.is_alive():
                 raise RuntimeError("shared telemetry reader did not stop")
-
-
-def main() -> None:
-    """Run a hardware-free calculation demonstration."""
-    examples = (("far", (288, 352)), ("near", (220, 420)),
-                ("right", (490, 590)), ("lost", None))
-    for name, bounds in examples:
-        target = None if bounds is None else {
-            "x1": bounds[0], "x2": bounds[1], "y1": 100, "y2": 200,
-            "confidence": 0.9,
-        }
-        forward, yaw = calculate_motion(target, 640, 480)
-        print(f"{name:6} forward={forward:.3f} m/s; yaw={yaw:+.3f} rad/s")
-
-
-if __name__ == "__main__":
-    main()
