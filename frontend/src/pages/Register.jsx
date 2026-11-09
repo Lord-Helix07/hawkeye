@@ -2,31 +2,37 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
-import { signUp } from '../services/auth.js'
+import { signUp, friendlyError } from '../services/auth.js'
 import '../styles/register.css'
 
 export default function Register() {
   const navigate = useNavigate()
   useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
+  const [email, setEmail] = useState('')
+  const [confirmEmail, setConfirmEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // pressing Enter in either box submits the form
+  // pressing Enter in any box submits the form
   async function handleRegister(e) {
     e.preventDefault()
-    if (!badge.trim() || !password) {
-      setError('Enter a badge number and password.')
+    if (!badge.trim() || !email.trim() || !password) {
+      setError('Enter a badge number, email, and password.')
+      return
+    }
+    if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+      setError('Email addresses do not match.')
       return
     }
     setError('')
     setSubmitting(true)
     try {
-      await signUp(badge, password) // saves the account in DynamoDB
+      await signUp(badge, email, confirmEmail, password) // saves the account in DynamoDB
       navigate('/login', { replace: true, state: LANDING_BEHIND })
     } catch (err) {
-      setError(err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message)
+      setError(friendlyError(err))
     } finally {
       setSubmitting(false)
     }
@@ -64,7 +70,24 @@ export default function Register() {
         />
         <input
           className="auth-input"
+          type="email"
+          autoComplete="email"
+          placeholder="Email..."
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          className="auth-input"
+          type="email"
+          autoComplete="email"
+          placeholder="Confirm Email..."
+          value={confirmEmail}
+          onChange={(e) => setConfirmEmail(e.target.value)}
+        />
+        <input
+          className="auth-input"
           type="password"
+          autoComplete="new-password"
           placeholder="Password..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}

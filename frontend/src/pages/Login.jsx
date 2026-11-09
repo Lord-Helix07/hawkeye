@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
+import { logIn, friendlyError } from '../services/auth.js'
 import '../styles/login.css'
 
 export default function Login() {
@@ -9,12 +10,26 @@ export default function Login() {
   useBackToLanding() // back button goes to the landing page
   const [badge, setBadge] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  // pressing Enter in either box submits the form
-  function handleLogin(e) {
+  // pressing Enter in any box submits the form
+  async function handleLogin(e) {
     e.preventDefault()
-    // TODO: check badge + password with the backend before letting them in
-    navigate('/deploy')
+    if (!badge.trim() || !password) {
+      setError('Enter your badge number and password.')
+      return
+    }
+    setError('')
+    setSubmitting(true)
+    try {
+      await logIn(badge, password) // checks the account in DynamoDB
+      navigate('/deploy')
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -51,18 +66,33 @@ export default function Login() {
         <input
           className="auth-input"
           type="password"
+          autoComplete="current-password"
           placeholder="Password..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         {/* hidden button so Enter submits the form */}
-        <button type="submit" hidden />
+        <button type="submit" hidden disabled={submitting} />
       </form>
+
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
 
       <p className="auth-switch">
         Don’t have an account?{' '}
         <button onClick={() => navigate('/register', { replace: true, state: LANDING_BEHIND })}>Register now.</button>
       </p>
+
+      <button
+        type="button"
+        className="auth-forgot"
+        onClick={() => navigate('/forgot-password', { replace: true, state: LANDING_BEHIND })}
+      >
+        Forgot your password?
+      </button>
     </main>
   )
 }

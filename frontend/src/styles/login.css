@@ -15,12 +15,12 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .hawkeye-icon {
-  width: 82px;
-  height: 82px;
+  width: 64px;
+  height: 64px;
   display: block;
   fill: white;
   transform: rotate(45deg);
@@ -33,28 +33,28 @@
 }
 
 .auth-title {
-  margin: 0 0 48px;
-  font-size: 40px;
+  margin: 0 0 36px;
+  font-size: 32px;
   font-weight: 400;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 38px;
+  gap: 24px;
 }
 
 /* light gray pill-shaped input boxes */
 .auth-input {
-  width: 396px;
-  height: 62px;
+  width: 340px;
+  height: 50px;
   box-sizing: border-box;
   padding: 0 16px;
   background-color: #d9d9d9;
   border: none;
   border-radius: 999px;
   color: #000000;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .auth-input::placeholder {
@@ -67,8 +67,8 @@
 
 /* "Don't have an account? line */
 .auth-switch {
-  margin-top: 54px;
-  font-size: 20px;
+  margin-top: 40px;
+  font-size: 16px;
 }
 
 /* register now link  */
@@ -77,8 +77,78 @@
   border: none;
   padding: 0;
   color: #FF79C6;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* "Forgot your password?" link under the "Register now." line */
+.auth-forgot {
+  margin-top: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #d9d9d9;
+  font-size: 15px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-forgot:hover {
+  color: #ffffff;
+}
+
+/* shared by every auth page (login.css is imported by the others) */
+.auth-error {
+  margin: 16px 0 0;
+  color: #ff8a8a;
+  font-size: 15px;
+  text-align: center;
+}
+
+.auth-notice {
+  max-width: 340px;
+  margin: 16px 0 0;
+  color: #d9d9d9;
+  font-size: 15px;
+  text-align: center;
+}
+
+.auth-hint {
+  max-width: 340px;
+  margin: -16px 0 28px;
+  color: #a6a6a6;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* visible submit button (e.g. "Reset" on the forgot password page) */
+.auth-submit {
+  width: 170px;
+  align-self: center;
+  height: 50px;
+  box-sizing: border-box;
+  background-color: #FF9F43; /* neon orange */
+  border: none;
+  border-radius: 999px;
+  color: #000000;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.auth-submit:hover {
+  opacity: 0.85;
+}
+
+.auth-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* "Log in." link on the forgot password page: neon purple */
+.forgot-page .auth-switch button {
+  color: #BD93F9;
 }

@@ -35,6 +35,14 @@
       "Effect": "Allow",
       "Action": "lambda:InvokeFunction",
       "Resource": "*"
+    },
+    {
+      "Sid": "HawkeyeSendResetEmail",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail"
+      ],
+      "Resource": "*"
     }
   ]
 }

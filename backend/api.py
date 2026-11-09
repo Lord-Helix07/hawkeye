@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from signup import router as signup_router
 from view_mission_status import router as missions_router
 from login import router as login_router
+from password_reset import router as password_reset_router
 from launch import router as launch_router
 from telemetry import router as telemetry_router
 from mission_status import router as mission_status_router
@@ -47,6 +48,7 @@ app.add_middleware(
 app.include_router(signup_router)  # POST /signup
 app.include_router(missions_router)  # /missions/...
 app.include_router(login_router)   # POST /login
+app.include_router(password_reset_router)  # POST /forgot-password, /reset-password
 app.include_router(mission_status_router)  # GET /missions/{id}/status (Dashboard)
 app.include_router(launch_router)  # POST /missions/{id}/launch, confirm-launch, request-landing
 app.include_router(telemetry_router)  # POST /telemetry, /flight-controller/status (Raspberry Pi)

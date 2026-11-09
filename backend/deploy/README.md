@@ -14,7 +14,7 @@ Local dev is unchanged: `npm run dev` + `uvicorn api:app --reload --port 8000` s
 | `hawkeye-api.service` | Keeps the API running (systemd) |
 | `nginx-api.fly-hawkeye.com.conf` | Public entrance for `api.fly-hawkeye.com` |
 | `hawkeye.env.example` | Server settings (region, table names) |
-| `iam-policy.json` | Permissions the server needs (DynamoDB, Lambda) |
+| `iam-policy.json` | Permissions the server needs (DynamoDB, Lambda, SES) |
 
 ---
 
@@ -93,6 +93,32 @@ The API address comes from `frontend/.env.production` (`https://api.fly-hawkeye.
 
 ---
 
+## 6. Password reset emails (Amazon SES)
+
+The "Forgot Password" page emails a reset link through Amazon SES. Until this is
+set up, the link is only printed in the server log (`sudo journalctl -u hawkeye-api -f`).
+
+1. **Verify the domain** so mail can come from any `@fly-hawkeye.com` address:
+   **SES → Identities → Create identity → Domain** → `fly-hawkeye.com`, keep **Easy DKIM** on.
+   Add the 3 CNAME records SES shows to the domain's DNS. It flips to **Verified** within an hour or so.
+   *(Quicker for testing: create an **Email address** identity instead and click the link SES emails you.)*
+   Use the same region as `AWS_REGION`, or set `SES_REGION`.
+2. **Allow the server to send:** update `HawkeyeApiPolicy` with the current `iam-policy.json` (it now includes `ses:SendEmail`).
+3. **Settings on the server:** `sudo nano /etc/hawkeye/hawkeye.env` and add
+   ```
+   SES_SENDER_EMAIL=noreply@fly-hawkeye.com
+   SES_SENDER_NAME=Hawkeye
+   FRONTEND_URL=https://fly-hawkeye.com
+   ```
+   then `sudo systemctl restart hawkeye-api`. (setup_server.sh doesn't overwrite an existing env file, so add these by hand.)
+4. **Send a test email:**
+   ```bash
+   cd ~/hawkeye/backend && set -a && source /etc/hawkeye/hawkeye.env && set +a
+   ./venv/bin/python password_reset.py you@example.com
+   ```
+5. **Leave the SES sandbox.** New SES accounts can only send to addresses you've verified, at most 200 a day.
+   To email any officer: **SES → Account dashboard → Request production access** (usually approved within a day).
+
 ## Updating after code changes
 
 - **Frontend:** push to GitHub — Amplify rebuilds automatically.
@@ -110,6 +136,7 @@ The API address comes from `frontend/.env.production` (`https://api.fly-hawkeye.
 | 502 Bad Gateway | API crashed/not started — see above |
 | `AccessDeniedException` from DynamoDB | IAM role not attached, or wrong `AWS_REGION` |
 | CORS error in browser | Frontend origin must be `fly-hawkeye.com`, `www.`, `*.amplifyapp.com`, or localhost (see `backend/api.py`) |
+| Reset email never arrives | `sudo journalctl -u hawkeye-api \| grep -i reset`. `MessageRejected: Email address is not verified` = still in the SES sandbox or sender not verified; `AccessDenied` = IAM policy missing `ses:SendEmail`. Check spam too |
 | certbot fails | `api.fly-hawkeye.com` A record not live yet — `dig api.fly-hawkeye.com` should show the Elastic IP |
 
 ## Cost
