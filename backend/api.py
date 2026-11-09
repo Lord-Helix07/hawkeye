@@ -35,15 +35,34 @@ app.add_middleware(
     # Allowed sites:
     #   - any localhost port (Vite moves to 5174, 5175... when 5173 is busy)
     #   - the live site: https://fly-hawkeye.com and https://www.fly-hawkeye.com
-    #   - Amplify's preview URLs (https://<branch>.<id>.amplifyapp.com)
     allow_origin_regex=(
         r"http://(localhost|127\.0\.0\.1):\d+"
         r"|https://(www\.)?fly-hawkeye\.com"
-        r"|https://[a-z0-9.-]+\.amplifyapp\.com"
     ),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class StripApiPrefix:
+    """On Vercel, requests arrive as /api/login, /api/missions/... (vercel.json
+    sends /api/* to this backend without removing the prefix). Our routes are
+    /login, /missions/..., so drop the leading /api. Local dev without the
+    prefix keeps working unchanged."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope["path"]
+            if path == "/api" or path.startswith("/api/"):
+                new_path = path[4:] or "/"
+                scope = dict(scope, path=new_path, raw_path=new_path.encode())
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(StripApiPrefix)
 
 app.include_router(signup_router)  # POST /signup
 app.include_router(missions_router)  # /missions/...
