@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LANDING_BEHIND } from '../hooks/useBackToLanding.js'
-import { resetPassword, friendlyError } from '../services/auth.js'
+import { resetPassword, friendlyError, passwordProblem } from '../services/auth.js'
 import '../styles/login.css'
 
 export default function ResetPassword() {
@@ -25,6 +25,11 @@ export default function ResetPassword() {
     e.preventDefault()
     if (!password) {
       setError('Enter a new password.')
+      return
+    }
+    const problem = passwordProblem(password)
+    if (problem) {
+      setError(problem)
       return
     }
     if (password !== confirmPassword) {

@@ -8,3 +8,8 @@
 .register-page .auth-switch button {
   color: #5EF1F2;
 }
+
+/* "Register" button: neon cyan, same as "Sign in." */
+.register-page .auth-submit {
+  background-color: #5EF1F2;
+}

@@ -15,7 +15,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // pressing Enter in any box submits the form
+  // the Log in button (or Enter in any box) submits the form
   async function handleLogin(e) {
     e.preventDefault()
     if (!badge.trim() || !password) {
@@ -37,7 +37,7 @@ export default function Login() {
   }
 
   return (
-    <main className="auth-page">
+    <main className="auth-page login-page">
 
   {/* Icon is centered above the login title */}
   <div className="auth-icon-center">
@@ -75,8 +75,9 @@ export default function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {/* hidden button so Enter submits the form */}
-        <button type="submit" hidden disabled={submitting} />
+        <button type="submit" className="auth-submit" disabled={submitting}>
+          {submitting ? 'Logging in...' : 'Log in'}
+        </button>
       </form>
 
       {error && (

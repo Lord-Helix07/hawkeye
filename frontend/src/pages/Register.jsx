@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBackToLanding, LANDING_BEHIND } from '../hooks/useBackToLanding.js'
-import { signUp, friendlyError } from '../services/auth.js'
+import { signUp, friendlyError, passwordProblem, MIN_PASSWORD_LENGTH } from '../services/auth.js'
 import '../styles/register.css'
 
 export default function Register() {
@@ -15,7 +15,7 @@ export default function Register() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // pressing Enter in any box submits the form
+  // the Register button (or Enter in any box) submits the form
   async function handleRegister(e) {
     e.preventDefault()
     if (!badge.trim() || !email.trim() || !password) {
@@ -24,6 +24,11 @@ export default function Register() {
     }
     if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
       setError('Email addresses do not match.')
+      return
+    }
+    const problem = passwordProblem(password)
+    if (problem) {
+      setError(problem)
       return
     }
     setError('')
@@ -88,12 +93,13 @@ export default function Register() {
           className="auth-input"
           type="password"
           autoComplete="new-password"
-          placeholder="Password..."
+          placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)...`}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {/* hidden button so Enter submits the form */}
-        <button type="submit" hidden disabled={submitting} />
+        <button type="submit" className="auth-submit" disabled={submitting}>
+          {submitting ? 'Registering...' : 'Register'}
+        </button>
       </form>
 
       {error && (

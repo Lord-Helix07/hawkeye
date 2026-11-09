@@ -30,6 +30,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
+from passwords import check_password
 from users_store import (
     UsersTableSchemaError,
     get_user_by_email,
@@ -187,6 +188,7 @@ def reset_password(request: ResetPasswordRequest):
         raise HTTPException(status_code=400, detail="This reset link is invalid or has expired")
     if not request.new_password:
         raise HTTPException(status_code=422, detail="Enter a new password")
+    check_password(request.new_password)
 
     password_hash = bcrypt.hashpw(request.new_password.encode(), bcrypt.gensalt()).decode()
     try:

@@ -64,3 +64,11 @@ export async function resetPassword(badge, token, newPassword) {
 export function friendlyError(err) {
   return err.message === 'Failed to fetch' ? 'Could not reach the server. Is the backend running?' : err.message
 }
+
+// Same rule as the backend (backend/website/passwords.py). Returns an error message, or '' if OK.
+export const MIN_PASSWORD_LENGTH = 8
+export function passwordProblem(password) {
+  if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+  if (new TextEncoder().encode(password).length > 72) return 'Password is too long (72 characters max).'
+  return ''
+}

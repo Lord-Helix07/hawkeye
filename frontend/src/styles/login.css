@@ -157,3 +157,14 @@
 .forgot-page .auth-submit {
   background-color: #BD93F9;
 }
+
+/* "Log in" button on the login page: neon pink, same as "Register now." */
+.login-page .auth-submit {
+  background-color: #FF79C6;
+}
+
+/* Log in / Register buttons are as wide as the input boxes */
+.login-page .auth-submit,
+.register-page .auth-submit {
+  width: 340px;
+}

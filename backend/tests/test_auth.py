@@ -121,7 +121,7 @@ def test_reset_password_flow(client):
     link_badge, token = token_from(link)
     assert link_badge == badge == "1234"
 
-    bad = client.post("/reset-password", json={"badge_num": "1234", "token": "nope", "new_password": "x"})
+    bad = client.post("/reset-password", json={"badge_num": "1234", "token": "nope", "new_password": "newpass1"})
     assert bad.status_code == 400
 
     ok = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "newpass1"})
@@ -130,7 +130,7 @@ def test_reset_password_flow(client):
     assert login(client, password="newpass1").status_code == 200
 
     # single use
-    again = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "other"})
+    again = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "otherpass1"})
     assert again.status_code == 400
 
 
@@ -141,7 +141,7 @@ def test_reset_token_expires(client, monkeypatch):
     monkeypatch.setattr(password_reset, "RESET_TOKEN_TTL_SECONDS", -1)
     client.post("/forgot-password", json={"email": "officer@example.com"})
     _, token = token_from(client.sent_emails[0][2])
-    response = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "x"})
+    response = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "newpass1"})
     assert response.status_code == 400
 
 
@@ -184,3 +184,23 @@ def test_reset_email_escapes_link():
     assert "https://x.test/r?a=1&b=2" in text
     assert "a=1&amp;b=2" in html_body
     assert "12&lt;34" in html_body
+
+
+def test_signup_rejects_short_or_too_long_password(client):
+    assert signup(client, password="").status_code == 422
+    assert signup(client, password="short12").status_code == 422  # 7 characters
+    assert signup(client, password="x" * 73).status_code == 422  # over bcrypt's 72 bytes
+    assert signup(client, password="exactly8").status_code == 201
+
+
+def test_reset_password_rejects_short_password(client):
+    signup(client)
+    client.post("/forgot-password", json={"email": "officer@example.com"})
+    _, _, link = client.sent_emails[0]
+    _, token = token_from(link)
+
+    short = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "short"})
+    assert short.status_code == 422
+    # the token wasn't used up by the rejected attempt
+    ok = client.post("/reset-password", json={"badge_num": "1234", "token": token, "new_password": "newpass1"})
+    assert ok.status_code == 200

@@ -5,6 +5,7 @@ import bcrypt
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from passwords import check_password
 from users_store import BadgeNumTaken, EmailTaken, UsersTableSchemaError, create_user
 
 # The sign-up routes. They're plugged into the one backend app in api.py
@@ -34,6 +35,7 @@ def signup(request: SignUpRequest): #frontend handler for sign-up
         raise HTTPException(status_code=422, detail="Enter a valid email address")
     if email != confirm_email:
         raise HTTPException(status_code=422, detail="Email addresses do not match")
+    check_password(request.password)
 
     # check for duplicates
     # if user["username"] == request.username or user["email"] == request.email:
