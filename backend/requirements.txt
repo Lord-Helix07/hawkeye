@@ -8,4 +8,4 @@ botocore[crt]
 bcrypt
 PyJWT
 moto[dynamodb]  # tests only: fake DynamoDB
-mangums
+mangum
