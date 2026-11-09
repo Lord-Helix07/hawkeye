@@ -1,0 +1,20 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - REPOSITORY_URI=836620943856.dkr.ecr.us-east-1.amazonaws.com/hawkeye-backend
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
+
+  build:
+    commands:
+      - docker build -f backend/Dockerfile.lambda -t $REPOSITORY_URI:latest backend
+
+  post_build:
+    commands:
+      - docker push $REPOSITORY_URI:latest
+      - printf '[{"name":"hawkeye-backend","imageUri":"%s"}]' $REPOSITORY_URI:latest > image-definition.json
+
+artifacts:
+  files:
+    - image-definition.json
