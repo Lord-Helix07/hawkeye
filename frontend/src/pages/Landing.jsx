@@ -3,6 +3,7 @@ import '../styles/landing.css'
 import { useNavigate } from 'react-router-dom'
 import { LANDING_BEHIND } from '../hooks/useBackToLanding.js'
 import { useState } from 'react'
+import { clearSession, getSession } from '../services/session.js'
 
 const imageModules = import.meta.glob('./images/*', {
   eager: true,
@@ -20,6 +21,12 @@ const carouselPhotos = Object.entries(imageModules)
 export default function Landing() {
   const navigate = useNavigate()
   const [activePhoto, setActivePhoto] = useState(0)
+  const [loggedIn, setLoggedIn] = useState(() => Boolean(getSession()))
+
+  function logOut() {
+    clearSession()
+    setLoggedIn(false)
+  }
 
   const showPhoto = (index) => {
     setActivePhoto((index + carouselPhotos.length) % carouselPhotos.length)
@@ -47,8 +54,17 @@ export default function Landing() {
       </svg>
           Hawkeye</span>
         <div className="landing-auth">
-          <button className="login-btn" onClick={() => navigate('/login', { state: LANDING_BEHIND })}>Log in</button>
-          <button className="signup-btn" onClick={() => navigate('/register', { state: LANDING_BEHIND })}>Sign up</button>
+          {loggedIn ? (
+            <>
+              <button className="login-btn" onClick={logOut}>Log out</button>
+              <button className="signup-btn" onClick={() => navigate('/dashboard')}>Go to Dashboard</button>
+            </>
+          ) : (
+            <>
+              <button className="login-btn" onClick={() => navigate('/login', { state: LANDING_BEHIND })}>Log in</button>
+              <button className="signup-btn" onClick={() => navigate('/register', { state: LANDING_BEHIND })}>Sign up</button>
+            </>
+          )}
         </div>
       </header>
 

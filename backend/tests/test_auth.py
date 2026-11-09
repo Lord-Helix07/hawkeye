@@ -27,6 +27,10 @@ def client(monkeypatch):
     with moto.mock_aws():
         from fastapi.testclient import TestClient
 
+        from database.database import create_tables
+
+        create_tables()  # Missions etc. exist in the real account; make them in the fake one
+
         import password_reset
         from api import app
 

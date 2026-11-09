@@ -1,0 +1,169 @@
+/* shared top bar for the logged-in pages (components/AppHeader.jsx) */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+  padding: 0 24px;
+  background-color: #0a0a0b;
+  border-bottom: 1px solid #26282d;
+}
+
+.app-header-left,
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.app-header-right {
+  gap: 16px;
+}
+
+/* logo: goes back to the landing page */
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffffff;
+  font-size: 22px;
+  text-decoration: none;
+}
+
+.app-logo-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  fill: white;
+  transform: rotate(45deg);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
+  transition: transform 0.25s ease;
+}
+
+.app-logo:hover .app-logo-icon {
+  transform: rotate(45deg) scale(1.08);
+}
+
+/* Dashboard / Deploy links; the current page is white with an underline */
+.app-nav {
+  display: flex;
+  gap: 20px;
+}
+
+.app-nav a {
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+  color: #9ca3b5;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.app-nav a:hover {
+  color: #ffffff;
+}
+
+.app-nav a.active {
+  border-bottom-color: #ffffff;
+  color: #ffffff;
+}
+
+/* "Badge 1234 ▾" and its Log out menu */
+.account-menu {
+  position: relative;
+}
+
+.account-btn {
+  height: 40px;
+  padding: 0 14px;
+  background-color: transparent;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.account-btn:hover,
+.account-btn[aria-expanded='true'] {
+  border-color: #ffffff;
+}
+
+.account-btn {
+  white-space: nowrap;
+}
+
+.account-caret {
+  margin-left: 4px;
+  color: #9ca3b5;
+}
+
+/* page buttons in the header (e.g. Live feed) stay on one line */
+.app-header-right > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  min-width: 160px;
+  padding: 6px;
+  background-color: #121316;
+  border: 1px solid #26282d;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.account-dropdown button {
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #ff8a8a;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-dropdown button:hover {
+  background-color: rgba(235, 87, 87, 0.12);
+}
+
+/* phones: logo + links on the first row, page buttons + badge on the second */
+@media (max-width: 600px) {
+  .app-header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 12px 16px;
+    row-gap: 12px;
+  }
+
+  .app-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .account-label {
+    display: none;
+  }
+
+  .app-header-left {
+    gap: 16px;
+  }
+
+  .app-logo {
+    font-size: 0;
+  }
+
+  .app-nav {
+    gap: 14px;
+  }
+}

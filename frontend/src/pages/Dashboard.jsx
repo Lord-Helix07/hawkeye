@@ -4,8 +4,9 @@
 //   /dashboard/0001   (plain /dashboard shows the latest mission started)
 // useMissionStatus refreshes the data every 2 seconds; every card just
 // displays the props it's given.
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import '../styles/dashboard.css'
+import AppHeader from '../components/AppHeader.jsx'
 import { useMissionStatus } from '../hooks/useMissionStatus.js'
 import { MOCK_MAP_CENTER } from '../services/missionStatus.js'
 import { getLastMissionId } from '../services/missionNumbers.js'
@@ -23,12 +24,18 @@ export default function Dashboard() {
   const telemetry = status.telemetry ?? {} // empty until the drone sends data
   // set by the Deploy page when the automatic launch request didn't go through
   const launchError = useLocation().state?.launchError
+  const navigate = useNavigate()
 
   return (
     <div className="dashboard-page">
+      <AppHeader />
       <header className="dashboard-header">
         <h1 className="flight-status-title">Flight Status</h1>
         <div className="dashboard-header-right">
+          {/* start a new mission: goes to the Deploy (Target Vehicle) page */}
+          <button type="button" className="new-deploy-btn" onClick={() => navigate('/deploy')}>
+            Deploy drone <span aria-hidden="true">→</span>
+          </button>
           <LaunchControls missionId={missionId} status={liveStatus} onChange={refresh} />
           <span className="mission-label">Mission: {missionId}</span>
         </div>

@@ -1,36 +1,3 @@
-/* ---------- top bar: logo ---------- */
-.deploy-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-  padding: 0 24px;
-  border-bottom: 1px solid #3a3a3a;
-}
-
-.deploy-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 22px;
-  color: #ffffff;
-}
-
-/* same size as the old X icon, so "Hawkeye" stays in the same spot */
-.deploy-logo-icon {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  fill: white;
-  transform: rotate(45deg);
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
-  transition: transform 0.25s ease;
-}
-
-.deploy-logo-icon:hover {
-  transform: rotate(45deg) scale(1.08);
-}
-
 /* "Live feed" button (testing): opens the camera test page.
    Coral outline + pulsing dot = live video */
 .live-btn {
